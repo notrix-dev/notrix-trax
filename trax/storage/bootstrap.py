@@ -37,4 +37,35 @@ def _initialize_sqlite(database_path: Path) -> None:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(database_path) as connection:
         connection.execute("PRAGMA user_version = 1;")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS runs (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                artifact_ref TEXT,
+                error_message TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS steps (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT NOT NULL,
+                input_artifact_ref TEXT,
+                output_artifact_ref TEXT,
+                attributes_json TEXT,
+                error_message TEXT,
+                FOREIGN KEY (run_id) REFERENCES runs(id)
+            )
+            """
+        )
         connection.commit()
