@@ -7,7 +7,9 @@ from .repository import (
     insert_run,
     insert_step,
     list_edges_for_run,
+    list_failures_for_run,
     list_steps_for_run,
+    replace_failures_for_run,
     update_run_completion,
 )
 
@@ -19,6 +21,8 @@ __all__ = [
     "insert_run",
     "insert_step",
     "list_edges_for_run",
+    "list_failures_for_run",
     "list_steps_for_run",
+    "replace_failures_for_run",
     "update_run_completion",
 ]

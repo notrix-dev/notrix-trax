@@ -52,3 +52,17 @@ class Edge:
     source_step_id: str
     target_step_id: str
     edge_type: str
+
+
+@dataclass(frozen=True)
+class Failure:
+    """Structured detector finding persisted for a run."""
+
+    id: str
+    run_id: str
+    step_id: str | None
+    kind: str
+    severity: str
+    confidence: str
+    summary: str
+    evidence: dict[str, Any] = field(default_factory=dict)
