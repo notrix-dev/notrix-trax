@@ -7,6 +7,7 @@ import sys
 
 from trax.diff import DiffError, diff_runs
 from trax.graph import GraphValidationError, build_run_graph
+from trax.replay import ReplayError, replay_run
 from trax.storage import get_run, list_steps_for_run
 from trax.storage.repository import list_edges_for_run
 from trax.storage.artifacts import read_artifact
@@ -35,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     diff_parser.add_argument("run_id_1", help="The baseline run identifier.")
     diff_parser.add_argument("run_id_2", help="The comparison run identifier.")
+    replay_parser = subparsers.add_parser(
+        "replay",
+        help="Replay a captured run in simulation mode.",
+    )
+    replay_parser.add_argument("run_id", help="The captured run identifier.")
     return parser
 
 
@@ -61,6 +67,8 @@ def main() -> int:
         return _inspect_run(args.run_id)
     if args.command == "diff":
         return _diff_runs(args.run_id_1, args.run_id_2)
+    if args.command == "replay":
+        return _replay_run(args.run_id)
 
     return 0
 
@@ -154,6 +162,25 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
             print(f"  {metric.name}: n/a")
             continue
         print(f"  {metric.name}: {_format_metric_delta(metric.name, metric.delta)}")
+    return 0
+
+
+def _replay_run(run_id: str) -> int:
+    try:
+        result = replay_run(run_id)
+    except ReplayError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(f"Replay: {result.run_id}")
+    print(f"Status: {result.status}")
+    print(f"Simulated Steps: {result.simulated_count}")
+    print(f"Blocked Steps: {result.blocked_count}")
+    for step in result.step_results:
+        print(f"[{step.status}] {step.step_name}")
+        print(f"  safety_level: {step.safety_level}")
+        print(f"  source: {step.source}")
+        print(f"  detail: {step.detail}")
     return 0
 
 
