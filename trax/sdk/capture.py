@@ -7,11 +7,11 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from trax.models import Run, Step
+from trax.models import Edge, Run, Step
 from trax.models.core import utc_now
 from trax.storage import bootstrap_local_storage
 from trax.storage.artifacts import write_artifact
-from trax.storage.repository import insert_run, insert_step, update_run_completion
+from trax.storage.repository import insert_edge, insert_run, insert_step, update_run_completion
 
 
 @dataclass
@@ -19,6 +19,7 @@ class ActiveRun:
     id: str
     name: str
     step_count: int = 0
+    last_step_id_by_parent: dict[str | None, str] | None = None
 
 
 _STATE = threading.local()
@@ -37,7 +38,7 @@ def start_run(name: str, input_payload: Any = None, run_id: str | None = None) -
         artifact_ref=artifact_ref,
     )
     insert_run(run)
-    _STATE.active_run = ActiveRun(id=run.id, name=run.name)
+    _STATE.active_run = ActiveRun(id=run.id, name=run.name, last_step_id_by_parent={None: ""})
     return run
 
 
@@ -64,6 +65,7 @@ def trace_step(
     name: str,
     input_payload: Any = None,
     output_payload: Any = None,
+    parent_step_id: str | None = None,
     attributes: dict[str, Any] | None = None,
     error_message: str | None = None,
 ) -> Step:
@@ -86,10 +88,37 @@ def trace_step(
         position=active_run.step_count,
         started_at=timestamp,
         ended_at=timestamp,
+        parent_step_id=parent_step_id,
         input_artifact_ref=input_artifact_ref,
         output_artifact_ref=output_artifact_ref,
         attributes=attributes or {},
         error_message=error_message,
     )
     insert_step(step)
+    if parent_step_id is not None:
+        insert_edge(
+            Edge(
+                id=str(uuid.uuid4()),
+                run_id=active_run.id,
+                source_step_id=parent_step_id,
+                target_step_id=step.id,
+                edge_type="parent_child",
+            )
+        )
+
+    sibling_key = parent_step_id
+    previous_step_id = (active_run.last_step_id_by_parent or {}).get(sibling_key)
+    if previous_step_id:
+        insert_edge(
+            Edge(
+                id=str(uuid.uuid4()),
+                run_id=active_run.id,
+                source_step_id=previous_step_id,
+                target_step_id=step.id,
+                edge_type="control_flow",
+            )
+        )
+
+    assert active_run.last_step_id_by_parent is not None
+    active_run.last_step_id_by_parent[sibling_key] = step.id
     return step

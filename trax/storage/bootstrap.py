@@ -60,12 +60,34 @@ def _initialize_sqlite(database_path: Path) -> None:
                 position INTEGER NOT NULL,
                 started_at TEXT NOT NULL,
                 ended_at TEXT NOT NULL,
+                parent_step_id TEXT,
                 input_artifact_ref TEXT,
                 output_artifact_ref TEXT,
                 attributes_json TEXT,
                 error_message TEXT,
-                FOREIGN KEY (run_id) REFERENCES runs(id)
+                FOREIGN KEY (run_id) REFERENCES runs(id),
+                FOREIGN KEY (parent_step_id) REFERENCES steps(id)
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS edges (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                source_step_id TEXT NOT NULL,
+                target_step_id TEXT NOT NULL,
+                edge_type TEXT NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES runs(id),
+                FOREIGN KEY (source_step_id) REFERENCES steps(id),
+                FOREIGN KEY (target_step_id) REFERENCES steps(id)
+            )
+            """
+        )
+        existing_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(steps)").fetchall()
+        }
+        if "parent_step_id" not in existing_columns:
+            connection.execute("ALTER TABLE steps ADD COLUMN parent_step_id TEXT")
         connection.commit()

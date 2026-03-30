@@ -36,7 +36,19 @@ class Step:
     position: int
     started_at: str
     ended_at: str
+    parent_step_id: str | None = None
     input_artifact_ref: str | None = None
     output_artifact_ref: str | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
     error_message: str | None = None
+
+
+@dataclass(frozen=True)
+class Edge:
+    """Directed relationship between two steps in the same run."""
+
+    id: str
+    run_id: str
+    source_step_id: str
+    target_step_id: str
+    edge_type: str
