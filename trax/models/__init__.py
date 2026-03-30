@@ -1,5 +1,5 @@
 """Minimal domain models for Trax capture."""
 
-from .core import Run, Step
+from .core import Edge, Run, Step
 
-__all__ = ["Run", "Step"]
+__all__ = ["Edge", "Run", "Step"]

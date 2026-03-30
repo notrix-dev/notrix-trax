@@ -1,4 +1,4 @@
-"""SQLite repositories for minimal run and step persistence."""
+"""SQLite repositories for minimal run, step, and edge persistence."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import sqlite3
 from typing import Any
 
 from trax.config import db_path
-from trax.models import Run, Step
+from trax.models import Edge, Run, Step
 
 
 def insert_run(run: Run) -> None:
@@ -54,10 +54,10 @@ def insert_step(step: Step) -> None:
         connection.execute(
             """
             INSERT INTO steps (
-                id, run_id, name, status, position, started_at, ended_at,
+                id, run_id, name, status, position, started_at, ended_at, parent_step_id,
                 input_artifact_ref, output_artifact_ref, attributes_json, error_message
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 step.id,
@@ -67,10 +67,29 @@ def insert_step(step: Step) -> None:
                 step.position,
                 step.started_at,
                 step.ended_at,
+                step.parent_step_id,
                 step.input_artifact_ref,
                 step.output_artifact_ref,
                 json.dumps(step.attributes, sort_keys=True),
                 step.error_message,
+            ),
+        )
+        connection.commit()
+
+
+def insert_edge(edge: Edge) -> None:
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO edges (id, run_id, source_step_id, target_step_id, edge_type)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                edge.id,
+                edge.run_id,
+                edge.source_step_id,
+                edge.target_step_id,
+                edge.edge_type,
             ),
         )
         connection.commit()
@@ -105,7 +124,7 @@ def list_steps_for_run(run_id: str) -> list[Step]:
     with _connect() as connection:
         rows = connection.execute(
             """
-            SELECT id, run_id, name, status, position, started_at, ended_at,
+            SELECT id, run_id, name, status, position, started_at, ended_at, parent_step_id,
                    input_artifact_ref, output_artifact_ref, attributes_json, error_message
             FROM steps
             WHERE run_id = ?
@@ -123,10 +142,35 @@ def list_steps_for_run(run_id: str) -> list[Step]:
             position=row["position"],
             started_at=row["started_at"],
             ended_at=row["ended_at"],
+            parent_step_id=row["parent_step_id"],
             input_artifact_ref=row["input_artifact_ref"],
             output_artifact_ref=row["output_artifact_ref"],
             attributes=json.loads(row["attributes_json"] or "{}"),
             error_message=row["error_message"],
+        )
+        for row in rows
+    ]
+
+
+def list_edges_for_run(run_id: str) -> list[Edge]:
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, run_id, source_step_id, target_step_id, edge_type
+            FROM edges
+            WHERE run_id = ?
+            ORDER BY rowid ASC
+            """,
+            (run_id,),
+        ).fetchall()
+
+    return [
+        Edge(
+            id=row["id"],
+            run_id=row["run_id"],
+            source_step_id=row["source_step_id"],
+            target_step_id=row["target_step_id"],
+            edge_type=row["edge_type"],
         )
         for row in rows
     ]

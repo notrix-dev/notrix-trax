@@ -31,6 +31,7 @@ def test_run_and_step_persist_with_artifacts(tmp_path: Path, monkeypatch) -> Non
     assert len(steps) == 1
     assert steps[0].run_id == run.id
     assert steps[0].position == 1
+    assert steps[0].parent_step_id is None
     assert read_artifact(steps[0].input_artifact_ref) == {"url": "https://example.test"}
     assert read_artifact(steps[0].output_artifact_ref) == {"rows": 3}
 

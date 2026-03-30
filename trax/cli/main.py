@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+from trax.graph import GraphValidationError, build_run_graph
 from trax.storage import get_run, list_steps_for_run
+from trax.storage.repository import list_edges_for_run
 from trax.storage.artifacts import read_artifact
 from trax.storage.bootstrap import bootstrap_local_storage
 
@@ -72,8 +74,15 @@ def _inspect_run(run_id: str) -> int:
         print(f"Run Error: {run.error_message}")
 
     steps = list_steps_for_run(run_id)
+    edges = list_edges_for_run(run_id)
     print(f"Steps: {len(steps)}")
-    for step in steps:
+    try:
+        graph = build_run_graph(run_id, steps, edges)
+    except GraphValidationError as exc:
+        print(f"Graph Error: {exc}", file=sys.stderr)
+        return 1
+
+    for step in graph.topological_steps():
         print(f"- [{step.position}] {step.name} ({step.status})")
         if step.input_artifact_ref:
             print(f"  input: {step.input_artifact_ref}")
@@ -85,6 +94,12 @@ def _inspect_run(run_id: str) -> int:
             print(f"  attributes: {step.attributes}")
         if step.error_message:
             print(f"  error: {step.error_message}")
+    print("Graph:")
+    if not graph.steps:
+        print("  (empty)")
+    else:
+        for line in _render_graph(graph):
+            print(line)
     return 0
 
 
@@ -100,6 +115,43 @@ def _summarize_artifact(artifact_ref: str) -> str:
     if isinstance(payload, list):
         return f"list len={len(payload)}"
     return repr(payload)
+
+
+def _render_graph(graph: object) -> list[str]:
+    lines: list[str] = []
+    visited: set[str] = set()
+    step_by_id = {step.id: step for step in graph.steps}
+
+    def visit(step_id: str, depth: int) -> None:
+        if step_id in visited:
+            return
+        visited.add(step_id)
+        node = graph.nodes[step_id]
+        step = node.step
+        indent = "  " * depth
+        relation = "root" if node.parent_step_id is None else f"parent={node.parent_step_id}"
+        lines.append(f"{indent}- [{step.position}] {step.name} ({relation})")
+        for child_step_id in node.child_step_ids:
+            visit(child_step_id, depth + 1)
+
+    for root_step_id in graph.root_step_ids:
+        visit(root_step_id, 1)
+
+    orphaned = [step for step in graph.steps if step.id not in visited]
+    for step in orphaned:
+        lines.append(f"  - [{step.position}] {step.name} (disconnected)")
+
+    control_flow_edges = [
+        edge for edge in graph.edges if edge.edge_type == "control_flow"
+    ]
+    if control_flow_edges:
+        lines.append("  Control Flow:")
+        for edge in control_flow_edges:
+            source = step_by_id[edge.source_step_id]
+            target = step_by_id[edge.target_step_id]
+            lines.append(f"    - [{source.position}] {source.name} -> [{target.position}] {target.name}")
+
+    return lines
 
 
 if __name__ == "__main__":
