@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import sys
 
+from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
 from trax.graph import GraphValidationError, build_run_graph
 from trax.replay import ReplayError, replay_run
-from trax.storage import get_run, list_steps_for_run
+from trax.storage import get_run, list_failures_for_run, list_steps_for_run
 from trax.storage.repository import list_edges_for_run
 from trax.storage.artifacts import read_artifact
 from trax.storage.bootstrap import bootstrap_local_storage
@@ -117,6 +118,20 @@ def _inspect_run(run_id: str) -> int:
     else:
         for line in _render_graph(graph):
             print(line)
+    try:
+        failures = analyze_run(run_id)
+    except DetectionError as exc:
+        print(f"Detector Note: {exc}")
+        failures = list_failures_for_run(run_id)
+    print("Failures:")
+    if not failures:
+        print("  (none)")
+    else:
+        for failure in failures:
+            print(f"  - [{failure.severity}/{failure.confidence}] {failure.kind}")
+            print(f"    summary: {failure.summary}")
+            if failure.step_id:
+                print(f"    step_id: {failure.step_id}")
     return 0
 
 

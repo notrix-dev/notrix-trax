@@ -84,6 +84,22 @@ def _initialize_sqlite(database_path: Path) -> None:
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS failures (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                step_id TEXT,
+                kind TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                confidence TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                evidence_json TEXT,
+                FOREIGN KEY (run_id) REFERENCES runs(id),
+                FOREIGN KEY (step_id) REFERENCES steps(id)
+            )
+            """
+        )
         existing_columns = {
             row[1]
             for row in connection.execute("PRAGMA table_info(steps)").fetchall()
