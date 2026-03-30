@@ -1,1 +1,6 @@
-"""Explanation engine boundary placeholder for future rule-based explanation responsibilities."""
+"""Explanation engine exports."""
+
+from .engine import ExplainError, explain_run
+from .models import ExplanationResult
+
+__all__ = ["ExplainError", "ExplanationResult", "explain_run"]
