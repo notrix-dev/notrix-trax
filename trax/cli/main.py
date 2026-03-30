@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from trax.diff import DiffError, diff_runs
 from trax.graph import GraphValidationError, build_run_graph
 from trax.storage import get_run, list_steps_for_run
 from trax.storage.repository import list_edges_for_run
@@ -28,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect a captured run.",
     )
     inspect_parser.add_argument("run_id", help="The captured run identifier.")
+    diff_parser = subparsers.add_parser(
+        "diff",
+        help="Diff two captured runs.",
+    )
+    diff_parser.add_argument("run_id_1", help="The baseline run identifier.")
+    diff_parser.add_argument("run_id_2", help="The comparison run identifier.")
     return parser
 
 
@@ -52,6 +59,8 @@ def main() -> int:
 
     if args.command == "inspect":
         return _inspect_run(args.run_id)
+    if args.command == "diff":
+        return _diff_runs(args.run_id_1, args.run_id_2)
 
     return 0
 
@@ -100,6 +109,51 @@ def _inspect_run(run_id: str) -> int:
     else:
         for line in _render_graph(graph):
             print(line)
+    return 0
+
+
+def _diff_runs(run_id_1: str, run_id_2: str) -> int:
+    try:
+        result = diff_runs(run_id_1, run_id_2)
+    except DiffError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print("Summary")
+    print(f"  steps_added: {result.summary.added_steps}")
+    print(f"  steps_removed: {result.summary.removed_steps}")
+    print(f"  steps_modified: {result.summary.modified_steps}")
+    print(f"  steps_unchanged: {result.summary.unchanged_steps}")
+    print(f"  output_changed: {'yes' if result.summary.output_changed else 'no'}")
+    if result.summary.key_config_changes:
+        print(f"  key_config_changes: {', '.join(result.summary.key_config_changes)}")
+    if result.topology_changes:
+        print(f"  topology_changes: {len(result.topology_changes)}")
+
+    print("Step Diff")
+    for step_diff in result.step_diffs:
+        print(f"[{step_diff.status}] {step_diff.display_name}")
+        if step_diff.attribute_changes:
+            print("  attrs:")
+            for change in step_diff.attribute_changes:
+                print(f"    {change.key}: {change.before} -> {change.after}")
+        if step_diff.reordered:
+            print(
+                f"  traversal: {step_diff.before_position} -> {step_diff.after_position}"
+            )
+        if step_diff.parent_changed:
+            print("  topology: parent/edge changed")
+        if step_diff.output_missing:
+            print("  output: missing")
+        elif step_diff.output_changed:
+            print("  output: changed")
+
+    print("Metrics")
+    for metric in result.metrics:
+        if metric.delta is None:
+            print(f"  {metric.name}: n/a")
+            continue
+        print(f"  {metric.name}: {_format_metric_delta(metric.name, metric.delta)}")
     return 0
 
 
@@ -152,6 +206,14 @@ def _render_graph(graph: object) -> list[str]:
             lines.append(f"    - [{source.position}] {source.name} -> [{target.position}] {target.name}")
 
     return lines
+
+
+def _format_metric_delta(name: str, delta: float | int) -> str:
+    if name == "latency_ms":
+        return f"{delta:+.0f}ms"
+    if name == "cost":
+        return f"{delta:+.2f}"
+    return f"{delta:+.0f}"
 
 
 if __name__ == "__main__":
