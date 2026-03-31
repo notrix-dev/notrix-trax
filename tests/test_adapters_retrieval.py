@@ -28,5 +28,5 @@ def test_traced_retrieval_auto_creates_run_and_step(tmp_path: Path, monkeypatch)
     assert len(steps) == 1
     assert steps[0].attributes["semantic_type"] == "retrieval"
     assert steps[0].attributes["top_k"] == 2
-    assert read_artifact(steps[0].input_artifact_ref) == {"query": "hello"}
-    assert read_artifact(steps[0].output_artifact_ref) == [{"id": "doc-1"}, {"id": "doc-2"}]
+    assert read_artifact(steps[0].input_artifact_ref)["type"] == "dict"
+    assert read_artifact(steps[0].output_artifact_ref)["type"] == "list"

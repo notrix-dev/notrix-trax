@@ -20,7 +20,12 @@ def traced_chat(
     """Trace a minimal OpenAI chat-style call."""
     created_run = False
     if not has_active_run():
-        start_run(run_name, input_payload={"model": model, "messages": messages, "kwargs": kwargs})
+        start_run(
+            run_name,
+            input_payload={"model": model, "messages": messages, "kwargs": kwargs},
+            source_type="passive",
+            capture_policy="summary",
+        )
         created_run = True
 
     error_message: str | None = None
