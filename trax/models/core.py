@@ -66,3 +66,15 @@ class Failure:
     confidence: str
     summary: str
     evidence: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Explanation:
+    """Structured explanation produced from failures and run evidence."""
+
+    run_id: str
+    failure_id: str
+    diagnosis: str
+    step_id: str | None
+    likely_causes: tuple[str, ...]
+    suggestions: tuple[str, ...]

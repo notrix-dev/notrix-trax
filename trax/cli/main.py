@@ -7,6 +7,7 @@ import sys
 
 from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
+from trax.explain import ExplainError, explain_run
 from trax.graph import GraphValidationError, build_run_graph
 from trax.replay import ReplayError, replay_run
 from trax.storage import get_run, list_failures_for_run, list_steps_for_run
@@ -42,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Replay a captured run in simulation mode.",
     )
     replay_parser.add_argument("run_id", help="The captured run identifier.")
+    explain_parser = subparsers.add_parser(
+        "explain",
+        help="Explain a captured run using persisted evidence.",
+    )
+    explain_parser.add_argument("run_id", help="The captured run identifier.")
     return parser
 
 
@@ -70,6 +76,8 @@ def main() -> int:
         return _diff_runs(args.run_id_1, args.run_id_2)
     if args.command == "replay":
         return _replay_run(args.run_id)
+    if args.command == "explain":
+        return _explain_run(args.run_id)
 
     return 0
 
@@ -199,6 +207,37 @@ def _replay_run(run_id: str) -> int:
     return 0
 
 
+def _explain_run(run_id: str) -> int:
+    try:
+        result = explain_run(run_id)
+    except ExplainError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(f"Run: {result.run_id}")
+    if not result.explanations:
+        print("No issues detected.")
+        return 0
+
+    failures_by_id = {failure.id: failure for failure in list_failures_for_run(run_id)}
+    steps_by_id = {step.id: step for step in list_steps_for_run(run_id)}
+    for explanation in result.explanations:
+        failure = failures_by_id.get(explanation.failure_id)
+        print()
+        print(f"Failure: {explanation.diagnosis}")
+        if explanation.step_id and explanation.step_id in steps_by_id:
+            print(f"Step: {steps_by_id[explanation.step_id].name}")
+        elif failure is not None and failure.step_id:
+            print(f"Step: {failure.step_id}")
+        print("Likely causes:")
+        for cause in explanation.likely_causes:
+            print(f"- {cause}")
+        print("Suggestions:")
+        for suggestion in explanation.suggestions:
+            print(f"- {_render_suggestion(suggestion, steps_by_id.get(explanation.step_id))}")
+    return 0
+
+
 def _summarize_artifact(artifact_ref: str) -> str:
     try:
         payload = read_artifact(artifact_ref)
@@ -256,6 +295,14 @@ def _format_metric_delta(name: str, delta: float | int) -> str:
     if name == "cost":
         return f"{delta:+.2f}"
     return f"{delta:+.0f}"
+
+
+def _render_suggestion(suggestion: str, step: object) -> str:
+    if suggestion == "increase top_k" and step is not None:
+        current_top_k = getattr(step, "attributes", {}).get("top_k")
+        if current_top_k is not None:
+            return f"{suggestion} (current: {current_top_k})"
+    return suggestion
 
 
 if __name__ == "__main__":
