@@ -231,6 +231,7 @@ def _persist_run(name: str, *, steps: list[dict[str, object]], edges: list[tuple
             position=int(raw_step["position"]),
             started_at="2026-03-30T10:00:00+00:00",
             ended_at="2026-03-30T10:00:01+00:00",
+            safety_level=str(raw_step["attributes"].get("safety_level", "unknown")),
             output_artifact_ref=write_artifact(run_id, f"step-{raw_step['position']}-output", raw_step["output_payload"]),
             attributes=dict(raw_step["attributes"]),
         )

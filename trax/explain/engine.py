@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from trax.detect import DetectionError, analyze_run
 from trax.explain.diagnosis import diagnosis_for_failure
-from trax.explain.models import ExplanationResult
+from trax.explain.models import Explanation, ExplanationResult
 from trax.explain.playbooks import PLAYBOOKS
 from trax.explain.ranker import rank_suggestions
-from trax.models import Explanation, Step
+from trax.models import Step
 from trax.storage import get_run, list_failures_for_run, list_steps_for_run
 
 

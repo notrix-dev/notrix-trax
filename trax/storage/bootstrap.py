@@ -60,6 +60,7 @@ def _initialize_sqlite(database_path: Path) -> None:
                 position INTEGER NOT NULL,
                 started_at TEXT NOT NULL,
                 ended_at TEXT NOT NULL,
+                safety_level TEXT NOT NULL DEFAULT 'unknown',
                 parent_step_id TEXT,
                 input_artifact_ref TEXT,
                 output_artifact_ref TEXT,
@@ -106,4 +107,6 @@ def _initialize_sqlite(database_path: Path) -> None:
         }
         if "parent_step_id" not in existing_columns:
             connection.execute("ALTER TABLE steps ADD COLUMN parent_step_id TEXT")
+        if "safety_level" not in existing_columns:
+            connection.execute("ALTER TABLE steps ADD COLUMN safety_level TEXT NOT NULL DEFAULT 'unknown'")
         connection.commit()
