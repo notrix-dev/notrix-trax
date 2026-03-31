@@ -42,6 +42,21 @@ response = traced_chat(
 )
 ```
 
+## Ergonomic Capture
+
+```python
+from trax import run, step, traced_step
+
+@traced_step("prepare", attributes={"semantic_type": "transform"})
+def prepare_question(text: str) -> dict[str, str]:
+    return {"normalized_question": text.strip().lower()}
+
+with run("custom-flow", input={"question": "What does Trax do?"}):
+    question = prepare_question("What does Trax do?")
+    with step("answer", input=question, attributes={"semantic_type": "llm"}) as answer_step:
+        answer_step.set_output({"answer": "Trax debugs AI workflows locally."})
+```
+
 ## CLI Commands
 
 ```bash

@@ -21,7 +21,12 @@ def traced_retrieval(
     """Trace a minimal retrieval call."""
     created_run = False
     if not has_active_run():
-        start_run(run_name, input_payload={"query": query, "top_k": top_k, "backend": backend, "kwargs": kwargs})
+        start_run(
+            run_name,
+            input_payload={"query": query, "top_k": top_k, "backend": backend, "kwargs": kwargs},
+            source_type="passive",
+            capture_policy="summary",
+        )
         created_run = True
 
     error_message: str | None = None

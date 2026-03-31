@@ -27,5 +27,6 @@ def test_traced_chat_auto_creates_run_and_step(tmp_path: Path, monkeypatch) -> N
     assert len(steps) == 1
     assert steps[0].attributes["semantic_type"] == "llm"
     assert steps[0].attributes["model"] == "gpt-4.1-mini"
-    assert read_artifact(steps[0].input_artifact_ref) == {"messages": [{"role": "user", "content": "hello"}]}
-    assert read_artifact(steps[0].output_artifact_ref)["output_text"] == "hi"
+    assert read_artifact(steps[0].input_artifact_ref)["type"] == "dict"
+    assert "preview" in read_artifact(steps[0].input_artifact_ref)
+    assert read_artifact(steps[0].output_artifact_ref)["type"] == "dict"
