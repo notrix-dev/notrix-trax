@@ -5,11 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "notrix-trax"
 version = "0.1.0"
-description = "Local-first AI debugging foundation for Trax."
+description = "Local-first AI debugging tool for capture, replay, diff, and explanation."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
   { name = "Notrix" }
+]
+license = { text = "MIT" }
+keywords = ["ai", "debugging", "tracing", "replay", "observability"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 dependencies = []
 
