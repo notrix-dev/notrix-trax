@@ -17,9 +17,17 @@ class ReplayStepResult:
 
 
 @dataclass(frozen=True)
+class ReplayWindow:
+    start_at: str | None
+    stop_at: str | None
+    effective_step_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ReplayResult:
     run_id: str
     status: str
+    window: ReplayWindow
     step_results: tuple[ReplayStepResult, ...]
 
     @property
@@ -29,3 +37,7 @@ class ReplayResult:
     @property
     def blocked_count(self) -> int:
         return sum(1 for step in self.step_results if step.status == "BLOCKED")
+
+    @property
+    def skipped_count(self) -> int:
+        return sum(1 for step in self.step_results if step.status == "SKIPPED")

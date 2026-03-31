@@ -13,7 +13,7 @@ from trax.models import Edge, Run, Step
 from trax.replay import ReplayError, replay_run
 from trax.storage import bootstrap_local_storage
 from trax.storage.artifacts import write_artifact
-from trax.storage.repository import insert_edge, insert_run, insert_step
+from trax.storage.repository import insert_edge, insert_run, insert_step, list_steps_for_run
 
 
 def test_replay_simulates_safe_steps_in_deterministic_order(tmp_path: Path, monkeypatch) -> None:
@@ -31,6 +31,7 @@ def test_replay_simulates_safe_steps_in_deterministic_order(tmp_path: Path, monk
     result = replay_run(run.id)
 
     assert result.status == "completed"
+    assert result.window.effective_step_ids
     assert [step.status for step in result.step_results] == ["SIMULATED", "SIMULATED"]
     assert [step.step_name for step in result.step_results] == ["prepare", "llm:answer"]
 
@@ -46,7 +47,7 @@ def test_replay_blocks_unsafe_write_step(tmp_path: Path, monkeypatch) -> None:
 
     result = replay_run(run.id)
 
-    assert result.status == "completed_with_blocks"
+    assert result.status == "failed_safety_policy"
     assert result.blocked_count == 1
     assert result.step_results[0].safety_level == "unsafe_write"
 
@@ -62,7 +63,7 @@ def test_replay_blocks_unknown_safety_level(tmp_path: Path, monkeypatch) -> None
 
     result = replay_run(run.id)
 
-    assert result.status == "completed_with_blocks"
+    assert result.status == "failed_safety_policy"
     assert result.step_results[0].safety_level == "unknown"
 
 
@@ -101,10 +102,110 @@ def test_replay_cli_renders_simulated_and_blocked_steps(tmp_path: Path, monkeypa
         env={"TRAX_HOME": str(tmp_path / ".trax")},
     )
 
-    assert result.returncode == 0
+    assert result.returncode == 1
     assert "Replay:" in result.stdout
     assert "[SIMULATED] prepare" in result.stdout
     assert "[BLOCKED] db:update" in result.stdout
+
+
+def test_replay_start_only_window_skips_prior_steps(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = _persist_run(
+        "replay-start-only",
+        steps=[
+            _step("one", 1, safety_level="safe_read", output_payload={"ok": 1}),
+            _step("two", 2, safety_level="safe_read", output_payload={"ok": 2}),
+            _step("three", 3, safety_level="safe_read", output_payload={"ok": 3}),
+        ],
+        edges=[("control_flow", 0, 1), ("control_flow", 1, 2)],
+    )
+    step_ids = _list_step_ids(run.id)
+
+    result = replay_run(run.id, start_at=step_ids[1])
+
+    assert result.window.start_at == step_ids[1]
+    assert [step.status for step in result.step_results] == ["SKIPPED", "SIMULATED", "SIMULATED"]
+
+
+def test_replay_stop_only_window_skips_later_steps(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = _persist_run(
+        "replay-stop-only",
+        steps=[
+            _step("one", 1, safety_level="safe_read", output_payload={"ok": 1}),
+            _step("two", 2, safety_level="safe_read", output_payload={"ok": 2}),
+            _step("three", 3, safety_level="safe_read", output_payload={"ok": 3}),
+        ],
+        edges=[("control_flow", 0, 1), ("control_flow", 1, 2)],
+    )
+    step_ids = _list_step_ids(run.id)
+
+    result = replay_run(run.id, stop_at=step_ids[1])
+
+    assert result.window.stop_at == step_ids[1]
+    assert [step.status for step in result.step_results] == ["SIMULATED", "SIMULATED", "SKIPPED"]
+
+
+def test_replay_bounded_and_single_step_windows(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = _persist_run(
+        "replay-bounded",
+        steps=[
+            _step("one", 1, safety_level="safe_read", output_payload={"ok": 1}),
+            _step("two", 2, safety_level="safe_read", output_payload={"ok": 2}),
+            _step("three", 3, safety_level="safe_read", output_payload={"ok": 3}),
+        ],
+        edges=[("control_flow", 0, 1), ("control_flow", 1, 2)],
+    )
+    step_ids = _list_step_ids(run.id)
+
+    bounded = replay_run(run.id, start_at=step_ids[1], stop_at=step_ids[2])
+    single = replay_run(run.id, start_at=step_ids[1], stop_at=step_ids[1])
+
+    assert [step.status for step in bounded.step_results] == ["SKIPPED", "SIMULATED", "SIMULATED"]
+    assert [step.status for step in single.step_results] == ["SKIPPED", "SIMULATED", "SKIPPED"]
+
+
+def test_replay_invalid_step_and_reversed_window_fail_clearly(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = _persist_run(
+        "replay-invalid-window",
+        steps=[
+            _step("one", 1, safety_level="safe_read", output_payload={"ok": 1}),
+            _step("two", 2, safety_level="safe_read", output_payload={"ok": 2}),
+        ],
+        edges=[("control_flow", 0, 1)],
+    )
+    step_ids = _list_step_ids(run.id)
+
+    with pytest.raises(ReplayError, match="Replay step not found"):
+        replay_run(run.id, start_at="missing-step")
+
+    with pytest.raises(ReplayError, match="start_at is after stop_at"):
+        replay_run(run.id, start_at=step_ids[1], stop_at=step_ids[0])
+
+
+def test_replay_partial_window_requires_upstream_artifacts_for_hydration(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = _persist_run(
+        "replay-hydration",
+        steps=[
+            _step("one", 1, safety_level="safe_read", output_payload={"ok": 1}),
+            _step("two", 2, safety_level="safe_read", output_payload={"ok": 2}),
+        ],
+        edges=[("control_flow", 0, 1)],
+    )
+    step_ids = _list_step_ids(run.id)
+    artifact_path = tmp_path / ".trax" / "artifacts" / run.id / "step-1-output.json"
+    artifact_path.unlink()
+
+    with pytest.raises(ReplayError, match="missing required output artifact"):
+        replay_run(run.id, start_at=step_ids[1])
 
 
 def _persist_run(name: str, *, steps: list[dict[str, object]], edges: list[tuple[str, int, int]]) -> Run:
@@ -159,3 +260,7 @@ def _step(name: str, position: int, *, safety_level: str | None, output_payload:
         "attributes": attributes,
         "output_payload": output_payload,
     }
+
+
+def _list_step_ids(run_id: str) -> list[str]:
+    return [step.id for step in list_steps_for_run(run_id)]
