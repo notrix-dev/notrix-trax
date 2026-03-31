@@ -25,6 +25,11 @@ class ActiveRun:
 _STATE = threading.local()
 
 
+def has_active_run() -> bool:
+    """Return whether a run is currently active in this thread."""
+    return getattr(_STATE, "active_run", None) is not None
+
+
 def start_run(name: str, input_payload: Any = None, run_id: str | None = None) -> Run:
     """Start and persist a new run."""
     bootstrap_local_storage()

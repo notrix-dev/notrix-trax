@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 
+from trax.adapters.otel import import_trace
+from trax.cli.formatters import bullet, empty_state, field, section
 from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
 from trax.explain import ExplainError, explain_run
 from trax.graph import GraphValidationError, build_run_graph
 from trax.replay import ReplayError, replay_run
-from trax.storage import get_run, list_failures_for_run, list_steps_for_run
+from trax.storage import get_run, list_failures_for_run, list_runs, list_steps_for_run
 from trax.storage.repository import list_edges_for_run
 from trax.storage.artifacts import read_artifact
 from trax.storage.bootstrap import bootstrap_local_storage
@@ -27,11 +29,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show the Trax foundation version and exit.",
     )
     subparsers = parser.add_subparsers(dest="command")
+    import_parser = subparsers.add_parser(
+        "import-otel",
+        help="Import a basic OTel trace JSON file.",
+    )
+    import_parser.add_argument("trace_path", help="Path to the OTel trace JSON file.")
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List recent captured runs.",
+    )
+    list_parser.add_argument("--limit", type=int, default=20, help="Maximum number of runs to show.")
     inspect_parser = subparsers.add_parser(
         "inspect",
         help="Inspect a captured run.",
     )
     inspect_parser.add_argument("run_id", help="The captured run identifier.")
+    inspect_parser.add_argument("--step-type", dest="step_type", help="Filter steps by semantic type.")
+    inspect_parser.add_argument("--step-name", dest="step_name", help="Filter steps by exact step name.")
+    inspect_parser.add_argument("--step-status", dest="step_status", help="Filter steps by persisted status.")
     diff_parser = subparsers.add_parser(
         "diff",
         help="Diff two captured runs.",
@@ -50,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explain a captured run using persisted evidence.",
     )
     explain_parser.add_argument("run_id", help="The captured run identifier.")
+    explain_parser.add_argument("--failure-kind", dest="failure_kind", help="Filter explanations by failure kind.")
+    explain_parser.add_argument("--severity", dest="severity", help="Filter explanations by failure severity.")
     return parser
 
 
@@ -72,59 +89,115 @@ def main() -> int:
         print(f"Unable to initialize local Trax storage: {exc}", file=sys.stderr)
         return 1
 
+    if args.command == "import-otel":
+        return _import_otel(args.trace_path)
+    if args.command == "list":
+        return _list_runs(args.limit)
     if args.command == "inspect":
-        return _inspect_run(args.run_id)
+        return _inspect_run(
+            args.run_id,
+            step_type=args.step_type,
+            step_name=args.step_name,
+            step_status=args.step_status,
+        )
     if args.command == "diff":
         return _diff_runs(args.run_id_1, args.run_id_2)
     if args.command == "replay":
         return _replay_run(args.run_id, start_at=args.start_at, stop_at=args.stop_at)
     if args.command == "explain":
-        return _explain_run(args.run_id)
+        return _explain_run(args.run_id, failure_kind=args.failure_kind, severity=args.severity)
 
     return 0
 
 
-def _inspect_run(run_id: str) -> int:
+def _list_runs(limit: int) -> int:
+    runs = list_runs(limit=max(1, limit))
+    print(section("Runs"))
+    if not runs:
+        print(empty_state("No runs found."))
+        return 0
+
+    for run in runs:
+        print(bullet(run.id))
+        print(field("  Name", run.name))
+        print(field("  Status", run.status))
+        print(field("  Started", run.started_at))
+    return 0
+
+
+def _import_otel(trace_path: str) -> int:
+    try:
+        run_id = import_trace(trace_path)
+    except (OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(section("OTel Import"))
+    print(field("Run", run_id))
+    return 0
+
+
+def _inspect_run(
+    run_id: str,
+    *,
+    step_type: str | None = None,
+    step_name: str | None = None,
+    step_status: str | None = None,
+) -> int:
     run = get_run(run_id)
     if run is None:
         print(f"Run not found: {run_id}", file=sys.stderr)
         return 1
 
-    print(f"Run: {run.id}")
-    print(f"Name: {run.name}")
-    print(f"Status: {run.status}")
-    print(f"Started: {run.started_at}")
-    print(f"Ended: {run.ended_at or '-'}")
+    print(section("Run"))
+    print(field("Run", run.id))
+    print(field("Name", run.name))
+    print(field("Status", run.status))
+    print(field("Started", run.started_at))
+    print(field("Ended", run.ended_at or "-"))
     if run.artifact_ref:
-        print(f"Run Artifact: {run.artifact_ref}")
-        print(f"Run Artifact Summary: {_summarize_artifact(run.artifact_ref)}")
+        print(field("Run Artifact", run.artifact_ref))
+        print(field("Run Artifact Summary", _summarize_artifact(run.artifact_ref)))
     if run.error_message:
-        print(f"Run Error: {run.error_message}")
+        print(field("Run Error", run.error_message))
 
     steps = list_steps_for_run(run_id)
     edges = list_edges_for_run(run_id)
-    print(f"Steps: {len(steps)}")
+    print(field("Steps", len(steps)))
     try:
         graph = build_run_graph(run_id, steps, edges)
     except GraphValidationError as exc:
         print(f"Graph Error: {exc}", file=sys.stderr)
         return 1
 
-    for step in graph.topological_steps():
-        print(f"- [{step.position}] {step.name} ({step.status})")
+    filtered_steps = _filter_steps(
+        graph.topological_steps(),
+        step_type=step_type,
+        step_name=step_name,
+        step_status=step_status,
+    )
+    filtered_step_ids = {step.id for step in filtered_steps}
+    print(section("Step Details"))
+    if not filtered_steps:
+        print(empty_state(_no_steps_message(step_type=step_type, step_name=step_name, step_status=step_status)))
+    for step in filtered_steps:
+        print(bullet(f"[{step.position}] {step.name} ({step.status})"))
         if step.input_artifact_ref:
-            print(f"  input: {step.input_artifact_ref}")
-            print(f"  input_summary: {_summarize_artifact(step.input_artifact_ref)}")
+            print(field("  input", step.input_artifact_ref))
+            print(field("  input_summary", _summarize_artifact(step.input_artifact_ref)))
         if step.output_artifact_ref:
-            print(f"  output: {step.output_artifact_ref}")
-            print(f"  output_summary: {_summarize_artifact(step.output_artifact_ref)}")
+            print(field("  output", step.output_artifact_ref))
+            print(field("  output_summary", _summarize_artifact(step.output_artifact_ref)))
         if step.attributes:
-            print(f"  attributes: {step.attributes}")
+            print(field("  attributes", step.attributes))
         if step.error_message:
-            print(f"  error: {step.error_message}")
-    print("Graph:")
+            print(field("  error", step.error_message))
+    print(section("Graph"))
     if not graph.steps:
         print("  (empty)")
+    elif filtered_steps and (step_type is not None or step_name is not None or step_status is not None):
+        for line in _render_graph(graph, allowed_step_ids=filtered_step_ids):
+            print(line)
     else:
         for line in _render_graph(graph):
             print(line)
@@ -133,15 +206,19 @@ def _inspect_run(run_id: str) -> int:
     except DetectionError as exc:
         print(f"Detector Note: {exc}")
         failures = list_failures_for_run(run_id)
-    print("Failures:")
+    if step_type is not None or step_name is not None or step_status is not None:
+        failures = [
+            failure for failure in failures if failure.step_id is None or failure.step_id in filtered_step_ids
+        ]
+    print(section("Failures"))
     if not failures:
         print("  (none)")
     else:
         for failure in failures:
-            print(f"  - [{failure.severity}/{failure.confidence}] {failure.kind}")
-            print(f"    summary: {failure.summary}")
+            print(bullet(f"[{failure.severity}/{failure.confidence}] {failure.kind}", indent=1))
+            print(field("    summary", failure.summary))
             if failure.step_id:
-                print(f"    step_id: {failure.step_id}")
+                print(field("    step_id", failure.step_id))
     return 0
 
 
@@ -152,18 +229,18 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    print("Summary")
-    print(f"  steps_added: {result.summary.added_steps}")
-    print(f"  steps_removed: {result.summary.removed_steps}")
-    print(f"  steps_modified: {result.summary.modified_steps}")
-    print(f"  steps_unchanged: {result.summary.unchanged_steps}")
-    print(f"  output_changed: {'yes' if result.summary.output_changed else 'no'}")
+    print(section("Summary"))
+    print(field("  steps_added", result.summary.added_steps))
+    print(field("  steps_removed", result.summary.removed_steps))
+    print(field("  steps_modified", result.summary.modified_steps))
+    print(field("  steps_unchanged", result.summary.unchanged_steps))
+    print(field("  output_changed", "yes" if result.summary.output_changed else "no"))
     if result.summary.key_config_changes:
-        print(f"  key_config_changes: {', '.join(result.summary.key_config_changes)}")
+        print(field("  key_config_changes", ", ".join(result.summary.key_config_changes)))
     if result.topology_changes:
-        print(f"  topology_changes: {len(result.topology_changes)}")
+        print(field("  topology_changes", len(result.topology_changes)))
 
-    print("Step Diff")
+    print(section("Step Diff"))
     for step_diff in result.step_diffs:
         print(f"[{step_diff.status}] {step_diff.display_name}")
         if step_diff.attribute_changes:
@@ -181,7 +258,7 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
         elif step_diff.output_changed:
             print("  output: changed")
 
-    print("Metrics")
+    print(section("Metrics"))
     for metric in result.metrics:
         if metric.delta is None:
             print(f"  {metric.name}: n/a")
@@ -197,12 +274,13 @@ def _replay_run(run_id: str, *, start_at: str | None = None, stop_at: str | None
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(f"Replay: {result.run_id}")
-    print(f"Status: {result.status}")
-    print(f"Replay Window: {result.window.start_at or 'run-start'} -> {result.window.stop_at or 'run-end'}")
-    print(f"Simulated Steps: {result.simulated_count}")
-    print(f"Blocked Steps: {result.blocked_count}")
-    print(f"Skipped Steps: {result.skipped_count}")
+    print(section("Replay"))
+    print(field("Replay", result.run_id))
+    print(field("Status", result.status))
+    print(field("Replay Window", f"{result.window.start_at or 'run-start'} -> {result.window.stop_at or 'run-end'}"))
+    print(field("Simulated Steps", result.simulated_count))
+    print(field("Blocked Steps", result.blocked_count))
+    print(field("Skipped Steps", result.skipped_count))
     for step in result.step_results:
         print(f"[{step.status}] {step.step_name}")
         print(f"  safety_level: {step.safety_level}")
@@ -211,32 +289,45 @@ def _replay_run(run_id: str, *, start_at: str | None = None, stop_at: str | None
     return 1 if result.blocked_count else 0
 
 
-def _explain_run(run_id: str) -> int:
+def _explain_run(run_id: str, *, failure_kind: str | None = None, severity: str | None = None) -> int:
     try:
         result = explain_run(run_id)
     except ExplainError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(f"Run: {result.run_id}")
+    print(section("Run"))
+    print(field("Run", result.run_id))
+    failures_by_id = {failure.id: failure for failure in list_failures_for_run(run_id)}
+    filtered_explanations = [
+        explanation
+        for explanation in result.explanations
+        if _matches_failure_filter(
+            failures_by_id.get(explanation.failure_id),
+            failure_kind=failure_kind,
+            severity=severity,
+        )
+    ]
+    if not filtered_explanations and (failure_kind or severity):
+        print(empty_state(_no_failures_message(failure_kind=failure_kind, severity=severity)))
+        return 0
     if not result.explanations:
-        print("No issues detected.")
+        print(empty_state("No issues detected."))
         return 0
 
-    failures_by_id = {failure.id: failure for failure in list_failures_for_run(run_id)}
     steps_by_id = {step.id: step for step in list_steps_for_run(run_id)}
-    for explanation in result.explanations:
+    for explanation in filtered_explanations:
         failure = failures_by_id.get(explanation.failure_id)
         print()
-        print(f"Failure: {explanation.diagnosis}")
+        print(field("Failure", explanation.diagnosis))
         if explanation.step_id and explanation.step_id in steps_by_id:
-            print(f"Step: {steps_by_id[explanation.step_id].name}")
+            print(field("Step", steps_by_id[explanation.step_id].name))
         elif failure is not None and failure.step_id:
-            print(f"Step: {failure.step_id}")
-        print("Likely causes:")
+            print(field("Step", failure.step_id))
+        print(section("Likely causes"))
         for cause in explanation.likely_causes:
             print(f"- {cause}")
-        print("Suggestions:")
+        print(section("Suggestions"))
         for suggestion in explanation.suggestions:
             print(f"- {_render_suggestion(suggestion, steps_by_id.get(explanation.step_id))}")
     return 0
@@ -256,12 +347,15 @@ def _summarize_artifact(artifact_ref: str) -> str:
     return repr(payload)
 
 
-def _render_graph(graph: object) -> list[str]:
+def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> list[str]:
     lines: list[str] = []
     visited: set[str] = set()
     step_by_id = {step.id: step for step in graph.steps}
+    allowed = allowed_step_ids if allowed_step_ids is not None else set(step_by_id)
 
     def visit(step_id: str, depth: int) -> None:
+        if step_id not in allowed:
+            return
         if step_id in visited:
             return
         visited.add(step_id)
@@ -273,15 +367,24 @@ def _render_graph(graph: object) -> list[str]:
         for child_step_id in node.child_step_ids:
             visit(child_step_id, depth + 1)
 
-    for root_step_id in graph.root_step_ids:
-        visit(root_step_id, 1)
+    if allowed_step_ids is None:
+        for root_step_id in graph.root_step_ids:
+            visit(root_step_id, 1)
+    else:
+        for step in graph.steps:
+            if step.id in allowed:
+                visit(step.id, 1)
 
-    orphaned = [step for step in graph.steps if step.id not in visited]
+    orphaned = [step for step in graph.steps if step.id in allowed and step.id not in visited]
     for step in orphaned:
         lines.append(f"  - [{step.position}] {step.name} (disconnected)")
 
     control_flow_edges = [
-        edge for edge in graph.edges if edge.edge_type == "control_flow"
+        edge
+        for edge in graph.edges
+        if edge.edge_type == "control_flow"
+        and edge.source_step_id in allowed
+        and edge.target_step_id in allowed
     ]
     if control_flow_edges:
         lines.append("  Control Flow:")
@@ -307,6 +410,58 @@ def _render_suggestion(suggestion: str, step: object) -> str:
         if current_top_k is not None:
             return f"{suggestion} (current: {current_top_k})"
     return suggestion
+
+
+def _filter_steps(
+    steps: list[object],
+    *,
+    step_type: str | None,
+    step_name: str | None,
+    step_status: str | None,
+) -> list[object]:
+    filtered = list(steps)
+    if step_type is not None:
+        filtered = [step for step in filtered if step.attributes.get("semantic_type") == step_type]
+    if step_name is not None:
+        filtered = [step for step in filtered if step.name == step_name]
+    if step_status is not None:
+        filtered = [step for step in filtered if step.status == step_status]
+    return filtered
+
+
+def _matches_failure_filter(
+    failure: object,
+    *,
+    failure_kind: str | None,
+    severity: str | None,
+) -> bool:
+    if failure is None:
+        return failure_kind is None and severity is None
+    if failure_kind is not None and getattr(failure, "kind", None) != failure_kind:
+        return False
+    if severity is not None and getattr(failure, "severity", None) != severity:
+        return False
+    return True
+
+
+def _no_steps_message(*, step_type: str | None, step_name: str | None, step_status: str | None) -> str:
+    filters: list[str] = []
+    if step_type is not None:
+        filters.append(f"step_type={step_type}")
+    if step_name is not None:
+        filters.append(f"step_name={step_name}")
+    if step_status is not None:
+        filters.append(f"step_status={step_status}")
+    return f"No steps matched filter: {', '.join(filters)}" if filters else "No steps found."
+
+
+def _no_failures_message(*, failure_kind: str | None, severity: str | None) -> str:
+    filters: list[str] = []
+    if failure_kind is not None:
+        filters.append(f"kind={failure_kind}")
+    if severity is not None:
+        filters.append(f"severity={severity}")
+    return f"No failures matched filter: {', '.join(filters)}"
 
 
 if __name__ == "__main__":

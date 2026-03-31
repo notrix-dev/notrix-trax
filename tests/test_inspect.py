@@ -67,3 +67,33 @@ def test_inspect_fails_for_invalid_run_id(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "Run not found: missing-run" in result.stderr
+
+
+def test_inspect_filters_steps_and_handles_empty_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = start_run("filter-demo")
+    trace_step("retrieval-step", attributes={"semantic_type": "retrieval"})
+    trace_step("llm-step", attributes={"semantic_type": "llm"})
+    end_run(output_payload={"done": True})
+
+    filtered = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "inspect", run.id, "--step-type", "retrieval"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+    empty = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "inspect", run.id, "--step-name", "missing-step"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert filtered.returncode == 0
+    assert "retrieval-step" in filtered.stdout
+    assert "llm-step" not in filtered.stdout
+    assert empty.returncode == 0
+    assert "No steps matched filter: step_name=missing-step" in empty.stdout
