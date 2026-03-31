@@ -152,6 +152,52 @@ def test_explain_cli_renders_actionable_output(tmp_path: Path, monkeypatch) -> N
     assert "- increase top_k" in result.stdout
 
 
+def test_explain_filters_failures_and_handles_empty_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+    run, steps = _persist_run(
+        "explain-filter",
+        steps=[
+            _step("retrieval:faq_search", 1, {"semantic_type": "retrieval", "top_k": 1}, {"docs": []}),
+        ],
+        edges=[],
+    )
+    replace_failures_for_run(
+        run.id,
+        [
+            Failure(
+                id=str(uuid.uuid4()),
+                run_id=run.id,
+                step_id=steps[0].id,
+                kind="empty_retrieval",
+                severity="medium",
+                confidence="high",
+                summary="Retrieval returned no docs.",
+                evidence={"step_name": steps[0].name},
+            )
+        ],
+    )
+
+    filtered = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "explain", run.id, "--failure-kind", "empty_retrieval"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+    empty = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "explain", run.id, "--severity", "high"],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert filtered.returncode == 0
+    assert "retrieval_grounding_failure" in filtered.stdout
+    assert empty.returncode == 0
+    assert "No failures matched filter: severity=high" in empty.stdout
+
+
 def _persist_run(name: str, *, steps: list[dict[str, object]], edges: list[tuple[str, int, int]]) -> tuple[Run, list[Step]]:
     bootstrap_local_storage()
     run_id = str(uuid.uuid4())

@@ -145,6 +145,32 @@ def get_run(run_id: str) -> Run | None:
     )
 
 
+def list_runs(limit: int = 20) -> list[Run]:
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, name, status, started_at, ended_at, artifact_ref, error_message
+            FROM runs
+            ORDER BY started_at DESC, id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    return [
+        Run(
+            id=row["id"],
+            name=row["name"],
+            status=row["status"],
+            started_at=row["started_at"],
+            ended_at=row["ended_at"],
+            artifact_ref=row["artifact_ref"],
+            error_message=row["error_message"],
+        )
+        for row in rows
+    ]
+
+
 def list_steps_for_run(run_id: str) -> list[Step]:
     with _connect() as connection:
         rows = connection.execute(
