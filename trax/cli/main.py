@@ -43,6 +43,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Replay a captured run in simulation mode.",
     )
     replay_parser.add_argument("run_id", help="The captured run identifier.")
+    replay_parser.add_argument("--start-at", dest="start_at", help="Replay starting step id.")
+    replay_parser.add_argument("--stop-at", dest="stop_at", help="Replay ending step id.")
     explain_parser = subparsers.add_parser(
         "explain",
         help="Explain a captured run using persisted evidence.",
@@ -75,7 +77,7 @@ def main() -> int:
     if args.command == "diff":
         return _diff_runs(args.run_id_1, args.run_id_2)
     if args.command == "replay":
-        return _replay_run(args.run_id)
+        return _replay_run(args.run_id, start_at=args.start_at, stop_at=args.stop_at)
     if args.command == "explain":
         return _explain_run(args.run_id)
 
@@ -188,23 +190,25 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
     return 0
 
 
-def _replay_run(run_id: str) -> int:
+def _replay_run(run_id: str, *, start_at: str | None = None, stop_at: str | None = None) -> int:
     try:
-        result = replay_run(run_id)
+        result = replay_run(run_id, start_at=start_at, stop_at=stop_at)
     except ReplayError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
     print(f"Replay: {result.run_id}")
     print(f"Status: {result.status}")
+    print(f"Replay Window: {result.window.start_at or 'run-start'} -> {result.window.stop_at or 'run-end'}")
     print(f"Simulated Steps: {result.simulated_count}")
     print(f"Blocked Steps: {result.blocked_count}")
+    print(f"Skipped Steps: {result.skipped_count}")
     for step in result.step_results:
         print(f"[{step.status}] {step.step_name}")
         print(f"  safety_level: {step.safety_level}")
         print(f"  source: {step.source}")
         print(f"  detail: {step.detail}")
-    return 0
+    return 1 if result.blocked_count else 0
 
 
 def _explain_run(run_id: str) -> int:
