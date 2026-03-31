@@ -6,10 +6,7 @@ from trax.models import Step
 
 
 def safety_level_for_step(step: Step) -> str:
-    raw_value = step.attributes.get("safety_level")
-    if isinstance(raw_value, str) and raw_value:
-        return raw_value
-    return "unknown"
+    return step.safety_level or "unknown"
 
 
 def blocked_reason_for_step(step: Step) -> str | None:

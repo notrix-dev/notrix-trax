@@ -54,10 +54,10 @@ def insert_step(step: Step) -> None:
         connection.execute(
             """
             INSERT INTO steps (
-                id, run_id, name, status, position, started_at, ended_at, parent_step_id,
+                id, run_id, name, status, position, started_at, ended_at, safety_level, parent_step_id,
                 input_artifact_ref, output_artifact_ref, attributes_json, error_message
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 step.id,
@@ -67,6 +67,7 @@ def insert_step(step: Step) -> None:
                 step.position,
                 step.started_at,
                 step.ended_at,
+                step.safety_level,
                 step.parent_step_id,
                 step.input_artifact_ref,
                 step.output_artifact_ref,
@@ -175,7 +176,7 @@ def list_steps_for_run(run_id: str) -> list[Step]:
     with _connect() as connection:
         rows = connection.execute(
             """
-            SELECT id, run_id, name, status, position, started_at, ended_at, parent_step_id,
+            SELECT id, run_id, name, status, position, started_at, ended_at, safety_level, parent_step_id,
                    input_artifact_ref, output_artifact_ref, attributes_json, error_message
             FROM steps
             WHERE run_id = ?
@@ -193,6 +194,7 @@ def list_steps_for_run(run_id: str) -> list[Step]:
             position=row["position"],
             started_at=row["started_at"],
             ended_at=row["ended_at"],
+            safety_level=row["safety_level"] or "unknown",
             parent_step_id=row["parent_step_id"],
             input_artifact_ref=row["input_artifact_ref"],
             output_artifact_ref=row["output_artifact_ref"],

@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from trax.models import Explanation
+
+@dataclass(frozen=True)
+class Explanation:
+    run_id: str
+    failure_id: str
+    diagnosis: str
+    step_id: str | None
+    likely_causes: tuple[str, ...]
+    suggestions: tuple[str, ...]
 
 
 @dataclass(frozen=True)
