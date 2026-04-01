@@ -33,6 +33,22 @@ def test_ergonomic_run_and_step_capture_summary_payloads(tmp_path: Path, monkeyp
     assert "preview" in read_artifact(steps[0].output_artifact_ref)
 
 
+def test_ergonomic_step_output_assignment_persists_artifact(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    with run("assignment-demo") as current_run:
+        with step(
+            "retrieve_docs",
+            input={"query": "hello"},
+            attributes={"semantic_type": "retrieval", "safety_level": "safe_read"},
+        ) as traced:
+            traced.output = {"docs": [{"id": "doc-1", "text": "hello"}]}
+
+    steps = list_steps_for_run(current_run.id)
+    assert len(steps) == 1
+    assert read_artifact(steps[0].output_artifact_ref)["preview"]["docs"][0]["id"] == "doc-1"
+
+
 def test_traced_step_decorator_requires_active_run_and_records_step(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
 
