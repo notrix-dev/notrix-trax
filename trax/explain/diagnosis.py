@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from trax.models import Failure
+from trax.models import Failure, FailureKind
 
 
 def diagnosis_for_failure(failure: Failure) -> tuple[str, tuple[str, ...]]:
     """Map a failure to a diagnosis and likely-cause list."""
-    if failure.kind == "empty_retrieval":
+    if failure.kind == FailureKind.EMPTY_RETRIEVAL:
         return (
             "retrieval_grounding_failure",
             (
@@ -15,7 +15,7 @@ def diagnosis_for_failure(failure: Failure) -> tuple[str, tuple[str, ...]]:
                 "insufficient document coverage",
             ),
         )
-    if failure.kind == "loop_detected":
+    if failure.kind == FailureKind.LOOP_DETECTED:
         return (
             "control_flow_loop",
             (
@@ -23,7 +23,7 @@ def diagnosis_for_failure(failure: Failure) -> tuple[str, tuple[str, ...]]:
                 "missing exit condition or retry cap",
             ),
         )
-    if failure.kind == "latency_anomaly":
+    if failure.kind == FailureKind.LATENCY_ANOMALY:
         return (
             "latency_degradation",
             (
@@ -31,7 +31,7 @@ def diagnosis_for_failure(failure: Failure) -> tuple[str, tuple[str, ...]]:
                 "excessive work in one step or run path",
             ),
         )
-    if failure.kind == "missing_output":
+    if failure.kind == FailureKind.MISSING_OUTPUT:
         return (
             "missing_execution_output",
             (

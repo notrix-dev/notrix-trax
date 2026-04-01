@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from trax.collector import InProcessCollector, make_event
+from trax.models import EdgeType
 from trax.models.core import utc_now
 from trax.normalize import normalize_and_persist
 
@@ -76,7 +77,7 @@ def import_trace(trace: dict[str, Any] | str | Path) -> str:
                         "run_id": run_id,
                         "source_step_id": str(parent_id),
                         "target_step_id": span_id,
-                        "edge_type": "parent_child",
+                        "edge_type": EdgeType.PARENT_CHILD,
                     },
                 )
             )

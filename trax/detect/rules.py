@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from trax.graph import RunGraph
-from trax.models import Failure, Run, Step
+from trax.models import Failure, FailureKind, Run, Step
 from trax.storage.artifacts import read_artifact
 
 
@@ -27,7 +27,7 @@ def _detect_missing_output(run: Run, graph: RunGraph) -> list[Failure]:
             _failure(
                 run_id=run.id,
                 step_id=None,
-                kind="missing_output",
+                kind=FailureKind.MISSING_OUTPUT,
                 severity="high",
                 confidence="high",
                 summary="Run is missing an output artifact reference.",
@@ -41,7 +41,7 @@ def _detect_missing_output(run: Run, graph: RunGraph) -> list[Failure]:
                 _failure(
                     run_id=run.id,
                     step_id=step.id,
-                    kind="missing_output",
+                    kind=FailureKind.MISSING_OUTPUT,
                     severity="high",
                     confidence="high",
                     summary=f"Step {step.name} is missing an output artifact reference.",
@@ -57,7 +57,7 @@ def _detect_missing_output(run: Run, graph: RunGraph) -> list[Failure]:
                 _failure(
                     run_id=run.id,
                     step_id=step.id,
-                    kind="missing_output",
+                    kind=FailureKind.MISSING_OUTPUT,
                     severity="high",
                     confidence="high",
                     summary=f"Step {step.name} output artifact is missing from storage.",
@@ -86,7 +86,7 @@ def _detect_empty_retrieval(run: Run, graph: RunGraph) -> list[Failure]:
                 _failure(
                     run_id=run.id,
                     step_id=step.id,
-                    kind="empty_retrieval",
+                    kind=FailureKind.EMPTY_RETRIEVAL,
                     severity="medium",
                     confidence="high",
                     summary=f"Retrieval step {step.name} returned no documents.",
@@ -109,7 +109,7 @@ def _detect_loop(graph: RunGraph) -> list[Failure]:
                 _failure(
                     run_id=steps[0].run_id,
                     step_id=steps[-1].id,
-                    kind="loop_detected",
+                    kind=FailureKind.LOOP_DETECTED,
                     severity="medium",
                     confidence="medium",
                     summary=f"Repeated step pattern detected for {step_name}.",
@@ -127,7 +127,7 @@ def _detect_latency_anomaly(run: Run, graph: RunGraph) -> list[Failure]:
             _failure(
                 run_id=run.id,
                 step_id=None,
-                kind="latency_anomaly",
+                kind=FailureKind.LATENCY_ANOMALY,
                 severity="medium",
                 confidence="medium",
                 summary="Run latency exceeded the v1 local anomaly threshold.",
@@ -142,7 +142,7 @@ def _detect_latency_anomaly(run: Run, graph: RunGraph) -> list[Failure]:
                 _failure(
                     run_id=run.id,
                     step_id=step.id,
-                    kind="latency_anomaly",
+                    kind=FailureKind.LATENCY_ANOMALY,
                     severity="low",
                     confidence="medium",
                     summary=f"Step {step.name} exceeded the v1 step latency threshold.",
@@ -175,7 +175,7 @@ def _failure(
     *,
     run_id: str,
     step_id: str | None,
-    kind: str,
+    kind: FailureKind,
     severity: str,
     confidence: str,
     summary: str,

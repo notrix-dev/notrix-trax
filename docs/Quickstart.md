@@ -79,7 +79,7 @@ Step Diff:
     temperature: 0.2 -> 0.9
   output: changed
 Metrics:
-  latency_ms: [latency]ms
+  latency_ms: [X]ms
   tokens: n/a
   cost: n/a
 ```

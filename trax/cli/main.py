@@ -11,6 +11,7 @@ from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
 from trax.explain import ExplainError, explain_run
 from trax.graph import GraphValidationError, build_run_graph
+from trax.models import EdgeType
 from trax.replay import ReplayError, replay_run
 from trax.storage import get_run, list_failures_for_run, list_runs, list_steps_for_run
 from trax.storage.repository import list_edges_for_run
@@ -382,7 +383,7 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
     control_flow_edges = [
         edge
         for edge in graph.edges
-        if edge.edge_type == "control_flow"
+        if edge.edge_type == EdgeType.CONTROL_FLOW
         and edge.source_step_id in allowed
         and edge.target_step_id in allowed
     ]
