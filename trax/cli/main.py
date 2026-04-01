@@ -11,7 +11,7 @@ from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
 from trax.explain import ExplainError, explain_run
 from trax.graph import GraphValidationError, build_run_graph
-from trax.models import EdgeType
+from trax.models import EdgeType, SemanticType
 from trax.replay import ReplayError, replay_run
 from trax.storage import get_run, list_failures_for_run, list_runs, list_steps_for_run
 from trax.storage.repository import list_edges_for_run
@@ -422,12 +422,23 @@ def _filter_steps(
 ) -> list[object]:
     filtered = list(steps)
     if step_type is not None:
-        filtered = [step for step in filtered if step.attributes.get("semantic_type") == step_type]
+        filtered = [
+            step for step in filtered if _semantic_type_value(step.attributes.get("semantic_type")) == step_type
+        ]
     if step_name is not None:
         filtered = [step for step in filtered if step.name == step_name]
     if step_status is not None:
         filtered = [step for step in filtered if step.status == step_status]
     return filtered
+
+
+def _semantic_type_value(value: object) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return SemanticType(value)
+    except ValueError:
+        return value
 
 
 def _matches_failure_filter(

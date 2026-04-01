@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from trax.graph import RunGraph
-from trax.models import Step
+from trax.models import SemanticType, Step
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,10 @@ def step_type_for_match(step: Step) -> str:
     """Return the stable v1 step type heuristic used for matching."""
     semantic_type = step.attributes.get("semantic_type")
     if isinstance(semantic_type, str) and semantic_type:
-        return semantic_type
+        try:
+            return SemanticType(semantic_type)
+        except ValueError:
+            return semantic_type
     if ":" in step.name:
         return step.name.split(":", 1)[0]
     return "generic"

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from trax.graph import RunGraph
-from trax.models import Failure, FailureKind, Run, Step
+from trax.models import Failure, FailureKind, Run, SemanticType, Step
 from trax.storage.artifacts import read_artifact
 
 
@@ -70,9 +70,9 @@ def _detect_missing_output(run: Run, graph: RunGraph) -> list[Failure]:
 def _detect_empty_retrieval(run: Run, graph: RunGraph) -> list[Failure]:
     failures: list[Failure] = []
     for step in graph.topological_steps():
-        semantic_type = step.attributes.get("semantic_type")
+        semantic_type = _semantic_type_for_step(step)
         name = step.name.lower()
-        if semantic_type != "retrieval" and "retriev" not in name and "search" not in name:
+        if semantic_type != SemanticType.RETRIEVAL and "retriev" not in name and "search" not in name:
             continue
         if step.output_artifact_ref is None:
             continue
@@ -161,6 +161,16 @@ def _retrieved_docs(payload: Any) -> list[Any] | None:
     if isinstance(payload, list):
         return payload
     return None
+
+
+def _semantic_type_for_step(step: Step) -> SemanticType | None:
+    value = step.attributes.get("semantic_type")
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return SemanticType(value)
+    except ValueError:
+        return None
 
 
 def _duration_ms(started_at: str, ended_at: str | None) -> int | None:

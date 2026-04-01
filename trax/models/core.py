@@ -37,6 +37,17 @@ class FailureKind(StrEnum):
     LATENCY_ANOMALY = "latency_anomaly"
 
 
+class SemanticType(StrEnum):
+    """Common step semantic types stored in step attributes."""
+
+    TRANSFORM = "transform"
+    RETRIEVAL = "retrieval"
+    LLM = "llm"
+    REASONING = "reasoning"
+    IO = "io"
+    RERANK = "rerank"
+
+
 @dataclass(frozen=True)
 class Run:
     """Captured run metadata."""
