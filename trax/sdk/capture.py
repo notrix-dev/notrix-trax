@@ -253,6 +253,14 @@ class _StepScope:
         self._parent_step_id = parent_step_id
         self._attributes = attributes
 
+    @property
+    def output(self) -> Any:
+        return self._output
+
+    @output.setter
+    def output(self, value: Any) -> None:
+        self._output = value
+
     def __enter__(self) -> "_StepScope":
         if not has_active_run():
             raise RuntimeError("No active run. Use trax.run(...) before trax.step(...).")
