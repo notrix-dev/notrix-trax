@@ -4,12 +4,48 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
 
 
 def utc_now() -> str:
     """Return an ISO-8601 UTC timestamp."""
     return datetime.now(timezone.utc).isoformat()
+
+
+class SafetyLevel(StrEnum):
+    """Persisted step safety levels."""
+
+    SAFE_READ = "safe_read"
+    UNSAFE_WRITE = "unsafe_write"
+    UNKNOWN = "unknown"
+
+
+class EdgeType(StrEnum):
+    """Persisted per-run graph edge kinds."""
+
+    PARENT_CHILD = "parent_child"
+    CONTROL_FLOW = "control_flow"
+
+
+class FailureKind(StrEnum):
+    """Persisted detector failure kinds."""
+
+    MISSING_OUTPUT = "missing_output"
+    EMPTY_RETRIEVAL = "empty_retrieval"
+    LOOP_DETECTED = "loop_detected"
+    LATENCY_ANOMALY = "latency_anomaly"
+
+
+class SemanticType(StrEnum):
+    """Common step semantic types stored in step attributes."""
+
+    TRANSFORM = "transform"
+    RETRIEVAL = "retrieval"
+    LLM = "llm"
+    REASONING = "reasoning"
+    IO = "io"
+    RERANK = "rerank"
 
 
 @dataclass(frozen=True)
@@ -36,7 +72,7 @@ class Step:
     position: int
     started_at: str
     ended_at: str
-    safety_level: str = "unknown"
+    safety_level: SafetyLevel = SafetyLevel.UNKNOWN
     parent_step_id: str | None = None
     input_artifact_ref: str | None = None
     output_artifact_ref: str | None = None
@@ -52,7 +88,7 @@ class Edge:
     run_id: str
     source_step_id: str
     target_step_id: str
-    edge_type: str
+    edge_type: EdgeType
 
 
 @dataclass(frozen=True)
@@ -62,7 +98,7 @@ class Failure:
     id: str
     run_id: str
     step_id: str | None
-    kind: str
+    kind: FailureKind
     severity: str
     confidence: str
     summary: str

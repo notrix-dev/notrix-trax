@@ -1,6 +1,6 @@
 """Explanation engine exports."""
 
 from .engine import ExplainError, explain_run
-from .models import ExplanationResult
+from .models import Diagnosis, ExplanationResult
 
-__all__ = ["ExplainError", "ExplanationResult", "explain_run"]
+__all__ = ["Diagnosis", "ExplainError", "ExplanationResult", "explain_run"]

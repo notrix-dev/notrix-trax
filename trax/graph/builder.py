@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 
-from trax.models import Edge, Step
+from trax.models import Edge, EdgeType, Step
 
 
 class GraphValidationError(ValueError):
@@ -107,7 +107,7 @@ def build_run_graph(run_id: str, steps: list[Step], edges: list[Edge]) -> RunGra
             )
         seen_edges.add(edge_key)
 
-        if edge.edge_type == "parent_child" and target_step.parent_step_id != edge.source_step_id:
+        if edge.edge_type == EdgeType.PARENT_CHILD and target_step.parent_step_id != edge.source_step_id:
             raise GraphValidationError(
                 f"Parent edge {edge.id} conflicts with step parent link for {target_step.id}"
             )

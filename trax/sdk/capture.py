@@ -9,7 +9,7 @@ from functools import wraps
 from typing import Any
 
 from trax.collector import InProcessCollector, make_event
-from trax.models import Run, Step
+from trax.models import EdgeType, Run, SafetyLevel, Step
 from trax.models.core import utc_now
 from trax.normalize import normalize_and_persist
 from trax.storage import bootstrap_local_storage
@@ -164,7 +164,7 @@ def trace_step(
                     "run_id": active_run.id,
                     "source_step_id": parent_step_id,
                     "target_step_id": step_id,
-                    "edge_type": "parent_child",
+                    "edge_type": EdgeType.PARENT_CHILD,
                 },
             )
         )
@@ -182,7 +182,7 @@ def trace_step(
                     "run_id": active_run.id,
                     "source_step_id": previous_step_id,
                     "target_step_id": step_id,
-                    "edge_type": "control_flow",
+                    "edge_type": EdgeType.CONTROL_FLOW,
                 },
             )
         )
@@ -198,7 +198,7 @@ def trace_step(
         position=active_run.step_count,
         started_at=timestamp,
         ended_at=timestamp,
-        safety_level=safety_level if isinstance(safety_level, str) and safety_level else "unknown",
+        safety_level=_coerce_safety_level(safety_level),
         parent_step_id=parent_step_id,
         attributes=raw_attributes,
         error_message=error_message,
@@ -343,6 +343,15 @@ def _apply_capture_policy(payload: Any, capture_policy: str) -> Any:
     if capture_policy == "metadata_only":
         return _payload_metadata(payload)
     return _payload_summary(payload)
+
+
+def _coerce_safety_level(value: Any) -> SafetyLevel:
+    if not isinstance(value, str) or not value:
+        return SafetyLevel.UNKNOWN
+    try:
+        return SafetyLevel(value)
+    except ValueError:
+        return SafetyLevel.UNKNOWN
 
 
 def _payload_metadata(payload: Any) -> Any:

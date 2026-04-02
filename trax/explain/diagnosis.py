@@ -2,45 +2,46 @@
 
 from __future__ import annotations
 
-from trax.models import Failure
+from trax.models import Failure, FailureKind
+from trax.explain.models import Diagnosis
 
 
-def diagnosis_for_failure(failure: Failure) -> tuple[str, tuple[str, ...]]:
+def diagnosis_for_failure(failure: Failure) -> tuple[Diagnosis, tuple[str, ...]]:
     """Map a failure to a diagnosis and likely-cause list."""
-    if failure.kind == "empty_retrieval":
+    if failure.kind == FailureKind.EMPTY_RETRIEVAL:
         return (
-            "retrieval_grounding_failure",
+            Diagnosis.RETRIEVAL_GROUNDING_FAILURE,
             (
                 "low retrieval relevance",
                 "insufficient document coverage",
             ),
         )
-    if failure.kind == "loop_detected":
+    if failure.kind == FailureKind.LOOP_DETECTED:
         return (
-            "control_flow_loop",
+            Diagnosis.CONTROL_FLOW_LOOP,
             (
                 "repeated step retry pattern",
                 "missing exit condition or retry cap",
             ),
         )
-    if failure.kind == "latency_anomaly":
+    if failure.kind == FailureKind.LATENCY_ANOMALY:
         return (
-            "latency_degradation",
+            Diagnosis.LATENCY_DEGRADATION,
             (
                 "slow external dependency or model call",
                 "excessive work in one step or run path",
             ),
         )
-    if failure.kind == "missing_output":
+    if failure.kind == FailureKind.MISSING_OUTPUT:
         return (
-            "missing_execution_output",
+            Diagnosis.MISSING_EXECUTION_OUTPUT,
             (
                 "step did not persist expected output",
                 "run completed with incomplete artifacts",
             ),
         )
     return (
-        "unknown_failure_pattern",
+        Diagnosis.UNKNOWN_FAILURE_PATTERN,
         (
             "detected issue does not yet have a specialized diagnosis",
         ),

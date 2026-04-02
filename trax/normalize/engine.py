@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from trax.collector import CollectedEvent
-from trax.models import Edge, Run, Step
+from trax.models import Edge, EdgeType, Run, SafetyLevel, Step
 from trax.storage import bootstrap_local_storage
 from trax.storage.artifacts import write_artifact
 from trax.storage.repository import insert_edge, insert_run, insert_step, update_run_completion
@@ -49,7 +49,7 @@ def normalize_and_persist(events: list[CollectedEvent]) -> dict[str, Any]:
                 position=payload["position"],
                 started_at=payload["started_at"],
                 ended_at=payload["ended_at"],
-                safety_level=payload.get("safety_level") or "unknown",
+                safety_level=_coerce_safety_level(payload.get("safety_level")),
                 parent_step_id=payload.get("parent_step_id"),
                 input_artifact_ref=input_ref,
                 output_artifact_ref=output_ref,
@@ -64,7 +64,16 @@ def normalize_and_persist(events: list[CollectedEvent]) -> dict[str, Any]:
                     run_id=payload["run_id"],
                     source_step_id=payload["source_step_id"],
                     target_step_id=payload["target_step_id"],
-                    edge_type=payload["edge_type"],
+                    edge_type=EdgeType(payload["edge_type"]),
                 )
             )
     return state
+
+
+def _coerce_safety_level(value: object) -> SafetyLevel:
+    if not isinstance(value, str) or not value:
+        return SafetyLevel.UNKNOWN
+    try:
+        return SafetyLevel(value)
+    except ValueError:
+        return SafetyLevel.UNKNOWN

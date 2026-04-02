@@ -7,7 +7,7 @@ import sqlite3
 from typing import Any
 
 from trax.config import db_path
-from trax.models import Edge, Failure, Run, Step
+from trax.models import Edge, EdgeType, Failure, FailureKind, Run, SafetyLevel, Step
 
 
 def insert_run(run: Run) -> None:
@@ -194,7 +194,7 @@ def list_steps_for_run(run_id: str) -> list[Step]:
             position=row["position"],
             started_at=row["started_at"],
             ended_at=row["ended_at"],
-            safety_level=row["safety_level"] or "unknown",
+            safety_level=SafetyLevel(row["safety_level"] or SafetyLevel.UNKNOWN),
             parent_step_id=row["parent_step_id"],
             input_artifact_ref=row["input_artifact_ref"],
             output_artifact_ref=row["output_artifact_ref"],
@@ -223,7 +223,7 @@ def list_edges_for_run(run_id: str) -> list[Edge]:
             run_id=row["run_id"],
             source_step_id=row["source_step_id"],
             target_step_id=row["target_step_id"],
-            edge_type=row["edge_type"],
+            edge_type=EdgeType(row["edge_type"]),
         )
         for row in rows
     ]
@@ -246,7 +246,7 @@ def list_failures_for_run(run_id: str) -> list[Failure]:
             id=row["id"],
             run_id=row["run_id"],
             step_id=row["step_id"],
-            kind=row["kind"],
+            kind=FailureKind(row["kind"]),
             severity=row["severity"],
             confidence=row["confidence"],
             summary=row["summary"],

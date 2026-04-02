@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from trax.detect import DetectionError, analyze_run
 from trax.explain.diagnosis import diagnosis_for_failure
-from trax.explain.models import Explanation, ExplanationResult
+from trax.explain.models import Diagnosis, Explanation, ExplanationResult
 from trax.explain.playbooks import PLAYBOOKS
 from trax.explain.ranker import rank_suggestions
 from trax.models import Step
@@ -34,7 +34,7 @@ def explain_run(run_id: str) -> ExplanationResult:
     for failure in failures:
         diagnosis, likely_causes = diagnosis_for_failure(failure)
         step = steps_by_id.get(failure.step_id) if failure.step_id else None
-        suggestions = PLAYBOOKS.get(diagnosis, PLAYBOOKS["unknown_failure_pattern"])
+        suggestions = PLAYBOOKS.get(diagnosis, PLAYBOOKS[Diagnosis.UNKNOWN_FAILURE_PATTERN])
         ranked = rank_suggestions(diagnosis, suggestions, step=step, failure=failure)
         explanations.append(
             Explanation(
