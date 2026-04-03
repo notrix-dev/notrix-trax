@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from pathlib import Path
 
 from trax.adapters.otel import import_trace
 from trax.cli.formatters import bullet, empty_state, field, section
 from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
 from trax.explain import ExplainError, explain_run
-from trax.graph import GraphValidationError, build_run_graph
+from trax.graph import GraphValidationError, build_run_graph, export_run_graph
 from trax.models import EdgeType, SemanticType
 from trax.replay import ReplayError, replay_run
 from trax.storage import get_run, list_failures_for_run, list_runs, list_steps_for_run
@@ -48,6 +50,13 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("--step-type", dest="step_type", help="Filter steps by semantic type.")
     inspect_parser.add_argument("--step-name", dest="step_name", help="Filter steps by exact step name.")
     inspect_parser.add_argument("--step-status", dest="step_status", help="Filter steps by persisted status.")
+    graph_parser = subparsers.add_parser(
+        "graph",
+        help="Export a captured run graph.",
+    )
+    graph_parser.add_argument("--run-id", required=True, dest="run_id", help="The captured run identifier.")
+    graph_parser.add_argument("--format", default="json", dest="output_format", help="Export format. Launch scope: json.")
+    graph_parser.add_argument("--output", dest="output_path", help="Optional file path for exported graph JSON.")
     diff_parser = subparsers.add_parser(
         "diff",
         help="Diff two captured runs.",
@@ -101,6 +110,8 @@ def main() -> int:
             step_name=args.step_name,
             step_status=args.step_status,
         )
+    if args.command == "graph":
+        return _export_graph(args.run_id, output_format=args.output_format, output_path=args.output_path)
     if args.command == "diff":
         return _diff_runs(args.run_id_1, args.run_id_2)
     if args.command == "replay":
@@ -108,6 +119,33 @@ def main() -> int:
     if args.command == "explain":
         return _explain_run(args.run_id, failure_kind=args.failure_kind, severity=args.severity)
 
+    return 0
+
+
+def _export_graph(run_id: str, *, output_format: str, output_path: str | None) -> int:
+    if output_format != "json":
+        print(f"Unsupported graph export format: {output_format}", file=sys.stderr)
+        return 1
+
+    run = get_run(run_id)
+    if run is None:
+        print(f"Run not found: {run_id}", file=sys.stderr)
+        return 1
+
+    steps = list_steps_for_run(run_id)
+    edges = list_edges_for_run(run_id)
+    try:
+        graph = build_run_graph(run_id, steps, edges)
+    except GraphValidationError as exc:
+        print(f"Graph Error: {exc}", file=sys.stderr)
+        return 1
+
+    rendered = json.dumps(export_run_graph(run, graph), indent=2, sort_keys=True)
+    if output_path:
+        Path(output_path).write_text(rendered + "\n", encoding="utf-8")
+        return 0
+
+    print(rendered)
     return 0
 
 

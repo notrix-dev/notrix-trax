@@ -18,7 +18,7 @@ def test_cli_help_runs_successfully() -> None:
 
     assert result.returncode == 0
     assert "usage: trax" in result.stdout
-    assert "{import-otel,list,inspect,diff,replay,explain}" in result.stdout
+    assert "{import-otel,list,inspect,graph,diff,replay,explain}" in result.stdout
 
 
 def test_bootstrap_creates_local_storage_paths(tmp_path: Path, monkeypatch) -> None:
