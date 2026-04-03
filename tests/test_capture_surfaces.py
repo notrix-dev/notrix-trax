@@ -65,7 +65,7 @@ def test_traced_step_decorator_requires_active_run_and_records_step(tmp_path: Pa
     steps = list_steps_for_run(current_run.id)
     assert result["normalized"] == "hello"
     assert len(steps) == 1
-    assert steps[0].name == "normalize"
+    assert steps[0].name == "transform:normalize"
 
 
 def test_low_level_api_remains_functional(tmp_path: Path, monkeypatch) -> None:

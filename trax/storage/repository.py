@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
-
 from trax.config import db_path
 from trax.models import Edge, EdgeType, Failure, FailureKind, Run, SafetyLevel, Step
 

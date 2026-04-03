@@ -40,9 +40,12 @@ class FailureKind(StrEnum):
 class SemanticType(StrEnum):
     """Common step semantic types stored in step attributes."""
 
+    UNKNOWN = "unknown"
     TRANSFORM = "transform"
     RETRIEVAL = "retrieval"
     LLM = "llm"
+    TOOL = "tool"
+    AGENT = "agent"
     REASONING = "reasoning"
     IO = "io"
     RERANK = "rerank"

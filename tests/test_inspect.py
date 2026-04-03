@@ -27,9 +27,9 @@ def test_inspect_prints_run_and_step_details(tmp_path: Path, monkeypatch) -> Non
     assert result.returncode == 0
     assert f"Run: {run.id}" in result.stdout
     assert "Name: cli-demo" in result.stdout
-    assert "- [1] step-one (completed)" in result.stdout
+    assert "- [1] unknown:step_one (completed)" in result.stdout
     assert "Graph:" in result.stdout
-    assert "- [1] step-one (root)" in result.stdout
+    assert "- [1] unknown:step_one (root)" in result.stdout
 
 
 def test_inspect_renders_nested_graph(tmp_path: Path, monkeypatch) -> None:
@@ -51,9 +51,31 @@ def test_inspect_renders_nested_graph(tmp_path: Path, monkeypatch) -> None:
 
     assert result.returncode == 0
     assert "Graph:" in result.stdout
-    assert "- [1] parent (root)" in result.stdout
-    assert "- [2] child-a (parent=" in result.stdout
+    assert "- [1] unknown:parent (root)" in result.stdout
+    assert "- [2] unknown:child_a (parent=" in result.stdout
     assert "Control Flow:" in result.stdout
+
+
+def test_inspect_computes_duplicate_display_suffixes_without_persisting_them(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = start_run("duplicate-display-demo")
+    parent = trace_step("prepare", attributes={"semantic_type": "transform"})
+    trace_step("faq_search", parent_step_id=parent.id, attributes={"semantic_type": "retrieval"})
+    trace_step("faq_search", parent_step_id=parent.id, attributes={"semantic_type": "retrieval"})
+    end_run()
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "inspect", run.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert "retrieval:faq_search#1" in result.stdout
+    assert "retrieval:faq_search#2" in result.stdout
 
 
 def test_inspect_fails_for_invalid_run_id(tmp_path: Path) -> None:

@@ -177,12 +177,13 @@ def _inspect_run(
         step_name=step_name,
         step_status=step_status,
     )
+    display_names = _display_name_by_step_id(graph.steps)
     filtered_step_ids = {step.id for step in filtered_steps}
     print(section("Step Details"))
     if not filtered_steps:
         print(empty_state(_no_steps_message(step_type=step_type, step_name=step_name, step_status=step_status)))
     for step in filtered_steps:
-        print(bullet(f"[{step.position}] {step.name} ({step.status})"))
+        print(bullet(f"[{step.position}] {display_names[step.id]} ({step.status})"))
         if step.input_artifact_ref:
             print(field("  input", step.input_artifact_ref))
             print(field("  input_summary", _summarize_artifact(step.input_artifact_ref)))
@@ -317,12 +318,13 @@ def _explain_run(run_id: str, *, failure_kind: str | None = None, severity: str 
         return 0
 
     steps_by_id = {step.id: step for step in list_steps_for_run(run_id)}
+    display_names = _display_name_by_step_id(steps_by_id.values())
     for explanation in filtered_explanations:
         failure = failures_by_id.get(explanation.failure_id)
         print()
         print(field("Failure", explanation.diagnosis))
         if explanation.step_id and explanation.step_id in steps_by_id:
-            print(field("Step", steps_by_id[explanation.step_id].name))
+            print(field("Step", display_names[explanation.step_id]))
         elif failure is not None and failure.step_id:
             print(field("Step", failure.step_id))
         print(section("Likely causes"))
@@ -352,6 +354,7 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
     lines: list[str] = []
     visited: set[str] = set()
     step_by_id = {step.id: step for step in graph.steps}
+    display_names = _display_name_by_step_id(graph.steps)
     allowed = allowed_step_ids if allowed_step_ids is not None else set(step_by_id)
 
     def visit(step_id: str, depth: int) -> None:
@@ -364,7 +367,7 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
         step = node.step
         indent = "  " * depth
         relation = "root" if node.parent_step_id is None else f"parent={node.parent_step_id}"
-        lines.append(f"{indent}- [{step.position}] {step.name} ({relation})")
+        lines.append(f"{indent}- [{step.position}] {display_names[step.id]} ({relation})")
         for child_step_id in node.child_step_ids:
             visit(child_step_id, depth + 1)
 
@@ -378,7 +381,7 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
 
     orphaned = [step for step in graph.steps if step.id in allowed and step.id not in visited]
     for step in orphaned:
-        lines.append(f"  - [{step.position}] {step.name} (disconnected)")
+        lines.append(f"  - [{step.position}] {display_names[step.id]} (disconnected)")
 
     control_flow_edges = [
         edge
@@ -392,7 +395,9 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
         for edge in control_flow_edges:
             source = step_by_id[edge.source_step_id]
             target = step_by_id[edge.target_step_id]
-            lines.append(f"    - [{source.position}] {source.name} -> [{target.position}] {target.name}")
+            lines.append(
+                f"    - [{source.position}] {display_names[source.id]} -> [{target.position}] {display_names[target.id]}"
+            )
 
     return lines
 
@@ -439,6 +444,26 @@ def _semantic_type_value(value: object) -> str | None:
         return SemanticType(value)
     except ValueError:
         return value
+
+
+def _display_name_by_step_id(steps: object) -> dict[str, str]:
+    ordered_steps = sorted(list(steps), key=lambda step: (step.position, step.started_at, step.id))
+    counts: dict[tuple[str | None, str], int] = {}
+    totals: dict[tuple[str | None, str], int] = {}
+
+    for step in ordered_steps:
+        key = (step.parent_step_id, step.name)
+        totals[key] = totals.get(key, 0) + 1
+
+    display_names: dict[str, str] = {}
+    for step in ordered_steps:
+        key = (step.parent_step_id, step.name)
+        counts[key] = counts.get(key, 0) + 1
+        if totals[key] == 1:
+            display_names[step.id] = step.name
+        else:
+            display_names[step.id] = f"{step.name}#{counts[key]}"
+    return display_names
 
 
 def _matches_failure_filter(
