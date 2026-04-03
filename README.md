@@ -68,10 +68,29 @@ trax explain <run_id>
 trax import-otel trace.json
 ```
 
+## LangGraph Execution-Boundary Integration
+
+```python
+from trax.langgraph import traced_invoke, traced_node
+from langgraph.graph import END, START, StateGraph
+```
+
+Use `traced_invoke(...)` at the compiled graph invocation boundary and `@traced_node(...)` on real node functions.
+
+```python
+graph = StateGraph(MyState)
+# add nodes and edges...
+compiled = graph.compile()
+result = traced_invoke(compiled, {"question": "What does Trax do?"})
+```
+
+This integration traces real LangGraph execution at the invocation and node boundary. It does not depend on LangGraph internal callbacks or runtime events.
+
 ## Examples
 
 - `examples/rag-example/README.md`: retrieval + LLM flow using the adapter layer
 - `examples/agent-example/README.md`: simple multi-step workflow showing graph structure and a detectable failure
+- `examples/langgraph_basic.py`: real compiled LangGraph example using `traced_invoke(...)` and `@traced_node(...)`
 
 ## Development
 

@@ -14,3 +14,4 @@ venv/
 
 # Local Trax bootstrap paths
 .tmp-trax/
+.tmp-trax-example/

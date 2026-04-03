@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from trax.adapters.otel import import_trace
-from trax.storage import get_run, list_steps_for_run
+from trax.storage import get_run, list_edges_for_run, list_steps_for_run
 
 
 def test_import_trace_maps_basic_spans_to_steps(tmp_path: Path, monkeypatch) -> None:
@@ -27,8 +27,14 @@ def test_import_trace_maps_basic_spans_to_steps(tmp_path: Path, monkeypatch) -> 
     run = get_run(run_id)
     assert run is not None
     steps = list_steps_for_run(run_id)
+    edges = list_edges_for_run(run_id)
     assert [step.id for step in steps] == ["s1", "s2"]
-    assert steps[1].parent_step_id == "s1"
+    assert steps[1].parent_step_id is None
+    assert steps[1].attributes["scope_parent_step_id"] == "s1"
+    assert ("s1", "s2", "parent_child") in [
+        (edge.source_step_id, edge.target_step_id, str(edge.edge_type))
+        for edge in edges
+    ]
 
 
 def test_import_otel_cli_imports_trace_file(tmp_path: Path) -> None:

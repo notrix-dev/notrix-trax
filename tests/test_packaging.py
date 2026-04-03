@@ -11,12 +11,15 @@ def test_readme_contains_quickstart_and_adapter_usage() -> None:
     assert "Quickstart" in readme
     assert "traced_chat" in readme
     assert "traced_retrieval" in readme
+    assert "traced_invoke" in readme
+    assert "This integration traces real LangGraph execution at the invocation and node boundary." in readme
     assert "trax inspect <run_id>" in readme
 
 
 def test_examples_exist() -> None:
     assert Path("examples/rag-example/app.py").is_file()
     assert Path("examples/agent-example/app.py").is_file()
+    assert Path("examples/langgraph_basic.py").is_file()
 
 
 def test_license_exists() -> None:

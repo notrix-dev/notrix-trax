@@ -126,3 +126,29 @@ Skipped Steps: 0
 [SIMULATED] retrieve_docs
 [SIMULATED] generate_answer
 ```
+
+---
+
+## OPTIONAL — LANGGRAPH EXECUTION-BOUNDARY PATH
+
+Run:
+
+```bash
+python examples/langgraph_basic.py
+```
+
+Core call:
+
+```python
+result = traced_invoke(graph, input_payload)
+```
+
+Then:
+
+```bash
+trax list
+trax inspect <run_id>
+trax explain <run_id>
+```
+
+This integration traces real LangGraph execution at the invocation and node boundary. It does not depend on LangGraph internal callbacks or runtime events.
