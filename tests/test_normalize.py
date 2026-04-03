@@ -188,6 +188,59 @@ def test_normalizer_deduplicates_identical_semantic_events_conservatively(tmp_pa
     assert steps[0].name == "retrieval:faq_search"
 
 
+def test_normalizer_adds_fallback_edges_for_explicit_runs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+    run_id = str(uuid.uuid4())
+
+    normalize_and_persist(
+        [
+            make_event(
+                event_id=str(uuid.uuid4()),
+                source_type="sdk",
+                source_name="test",
+                event_kind="run_start",
+                payload={"run_id": run_id, "name": "demo", "started_at": "2026-03-31T00:00:00+00:00"},
+            ),
+            make_event(
+                event_id=str(uuid.uuid4()),
+                source_type="sdk",
+                source_name="test",
+                event_kind="step_end",
+                payload={
+                    "step_id": str(uuid.uuid4()),
+                    "run_id": run_id,
+                    "name": "prepare",
+                    "status": "completed",
+                    "position": 1,
+                    "started_at": "2026-03-31T00:00:00+00:00",
+                    "ended_at": "2026-03-31T00:00:01+00:00",
+                    "attributes": {"semantic_type": "transform", "source_type": "explicit"},
+                },
+            ),
+            make_event(
+                event_id=str(uuid.uuid4()),
+                source_type="sdk",
+                source_name="test",
+                event_kind="step_end",
+                payload={
+                    "step_id": str(uuid.uuid4()),
+                    "run_id": run_id,
+                    "name": "answer",
+                    "status": "completed",
+                    "position": 2,
+                    "started_at": "2026-03-31T00:00:01+00:00",
+                    "ended_at": "2026-03-31T00:00:02+00:00",
+                    "attributes": {"semantic_type": "llm", "source_type": "explicit"},
+                },
+            ),
+        ]
+    )
+
+    edges = list_edges_for_run(run_id)
+    assert len(edges) == 1
+    assert edges[0].edge_type == "control_flow"
+
+
 def test_normalizer_assigns_occurrence_indexes_within_parent_scope(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
     run_id = str(uuid.uuid4())
@@ -256,6 +309,7 @@ def test_normalizer_assigns_occurrence_indexes_within_parent_scope(tmp_path: Pat
     )
 
     steps = list_steps_for_run(run_id)
-    child_steps = [step for step in steps if step.parent_step_id == parent_id]
-    assert [step.name for step in child_steps] == ["retrieval:faq_search", "retrieval:faq_search"]
-    assert all("occurrence_index" not in step.attributes for step in child_steps)
+    retrieval_steps = [step for step in steps if step.name == "retrieval:faq_search"]
+    assert len(retrieval_steps) == 2
+    assert all(step.parent_step_id is None for step in retrieval_steps)
+    assert all(step.attributes.get("scope_parent_step_id") == parent_id for step in retrieval_steps)

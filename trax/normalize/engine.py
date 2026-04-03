@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from typing import Any
 
 from trax.collector import CollectedEvent
@@ -20,6 +21,8 @@ from trax.storage.repository import (
     insert_edge,
     insert_run,
     insert_step,
+    list_edges_for_run,
+    list_steps_for_run,
     update_run_completion,
 )
 
@@ -57,6 +60,8 @@ def normalize_and_persist(events: list[CollectedEvent]) -> dict[str, Any]:
             input_ref = write_artifact(payload["run_id"], f"step-{payload['position']}-input", payload.get("input_payload"))
             output_ref = write_artifact(payload["run_id"], f"step-{payload['position']}-output", payload.get("output_payload"))
             raw_attributes = dict(payload.get("attributes") or {})
+            if payload.get("parent_step_id") is not None:
+                raw_attributes.setdefault("scope_parent_step_id", payload["parent_step_id"])
             normalized_name, normalized_attributes = _normalize_step_identity(
                 raw_name=payload["name"],
                 source_type=payload.get("source_type"),
@@ -84,13 +89,14 @@ def normalize_and_persist(events: list[CollectedEvent]) -> dict[str, Any]:
                 started_at=payload["started_at"],
                 ended_at=payload["ended_at"],
                 safety_level=_coerce_safety_level(payload.get("safety_level")),
-                parent_step_id=payload.get("parent_step_id"),
+                parent_step_id=None,
                 input_artifact_ref=input_ref,
                 output_artifact_ref=output_ref,
                 attributes=normalized_attributes,
                 error_message=payload.get("error_message"),
             )
             insert_step(step)
+            _maybe_insert_fallback_edge(step)
         elif event.event_kind == "edge":
             insert_edge(
                 Edge(
@@ -244,3 +250,31 @@ def _stable_payload_signature(payload: object) -> object:
         return json.loads(json.dumps(payload, sort_keys=True, default=str))
     except TypeError:
         return repr(payload)
+
+
+def _maybe_insert_fallback_edge(step: Step) -> None:
+    existing_steps = list_steps_for_run(step.run_id)
+    prior_steps = [
+        candidate
+        for candidate in existing_steps
+        if candidate.id != step.id
+    ]
+    if not prior_steps:
+        return
+
+    source_step = sorted(prior_steps, key=lambda candidate: (candidate.position, candidate.started_at, candidate.id))[-1]
+    existing_edges = list_edges_for_run(step.run_id)
+    if any(edge.target_step_id == step.id for edge in existing_edges):
+        return
+    if any(edge.source_step_id == source_step.id and edge.target_step_id == step.id for edge in existing_edges):
+        return
+
+    insert_edge(
+        Edge(
+            id=str(uuid.uuid4()),
+            run_id=step.run_id,
+            source_step_id=source_step.id,
+            target_step_id=step.id,
+            edge_type=EdgeType.CONTROL_FLOW,
+        )
+    )
