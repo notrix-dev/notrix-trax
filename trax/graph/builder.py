@@ -70,7 +70,6 @@ class RunGraph:
 def build_run_graph(run_id: str, steps: list[Step], edges: list[Edge]) -> RunGraph:
     """Build and validate a per-run DAG from persisted steps and edges."""
     step_by_id = {step.id: step for step in steps}
-    child_ids_by_parent: dict[str, list[str]] = defaultdict(list)
     incoming_by_step_id: dict[str, list[str]] = defaultdict(list)
     outgoing_by_step_id: dict[str, list[str]] = defaultdict(list)
 
@@ -79,12 +78,6 @@ def build_run_graph(run_id: str, steps: list[Step], edges: list[Edge]) -> RunGra
             raise GraphValidationError(
                 f"Step {step.id} belongs to run {step.run_id}, expected {run_id}"
             )
-        if step.parent_step_id is not None:
-            if step.parent_step_id not in step_by_id:
-                raise GraphValidationError(
-                    f"Step {step.id} references missing parent {step.parent_step_id}"
-                )
-            child_ids_by_parent[step.parent_step_id].append(step.id)
 
     seen_edges: set[tuple[str, str, str]] = set()
     for edge in edges:
@@ -107,20 +100,22 @@ def build_run_graph(run_id: str, steps: list[Step], edges: list[Edge]) -> RunGra
             )
         seen_edges.add(edge_key)
 
-        if edge.edge_type == EdgeType.PARENT_CHILD and target_step.parent_step_id != edge.source_step_id:
-            raise GraphValidationError(
-                f"Parent edge {edge.id} conflicts with step parent link for {target_step.id}"
-            )
-
         outgoing_by_step_id[edge.source_step_id].append(edge.target_step_id)
         incoming_by_step_id[edge.target_step_id].append(edge.source_step_id)
 
     nodes = {
         step.id: StepNode(
             step=step,
-            parent_step_id=step.parent_step_id,
+            parent_step_id=None,
             child_step_ids=tuple(
-                sorted(child_ids_by_parent.get(step.id, []), key=lambda step_id: step_by_id[step_id].position)
+                sorted(
+                    [
+                        edge.target_step_id
+                        for edge in edges
+                        if edge.edge_type == EdgeType.PARENT_CHILD and edge.source_step_id == step.id
+                    ],
+                    key=lambda step_id: step_by_id[step_id].position,
+                )
             ),
             incoming_step_ids=tuple(
                 sorted(incoming_by_step_id.get(step.id, []), key=lambda step_id: step_by_id[step_id].position)
@@ -137,7 +132,11 @@ def build_run_graph(run_id: str, steps: list[Step], edges: list[Edge]) -> RunGra
         steps=tuple(sorted(steps, key=lambda step: step.position)),
         edges=tuple(edges),
         nodes=nodes,
-        root_step_ids=tuple(step.id for step in sorted(steps, key=lambda step: step.position) if step.parent_step_id is None),
+        root_step_ids=tuple(
+            step.id
+            for step in sorted(steps, key=lambda step: step.position)
+            if not incoming_by_step_id.get(step.id)
+        ),
     )
     graph.topological_steps()
     return graph

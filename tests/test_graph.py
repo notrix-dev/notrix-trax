@@ -28,14 +28,13 @@ def test_edges_persist_and_graph_reconstructs_for_nested_steps(tmp_path: Path, m
 
     assert {step.id for step in steps} == {root.id, child_one.id, child_two.id}
     assert [(edge.source_step_id, edge.target_step_id, edge.edge_type) for edge in edges] == [
-        (root.id, child_one.id, "parent_child"),
-        (root.id, child_two.id, "parent_child"),
+        (root.id, child_one.id, "control_flow"),
         (child_one.id, child_two.id, "control_flow"),
     ]
 
     graph = build_run_graph(run.id, steps, edges)
     assert graph.root_step_ids == (root.id,)
-    assert graph.nodes[root.id].child_step_ids == (child_one.id, child_two.id)
+    assert graph.nodes[root.id].child_step_ids == ()
     assert [step.id for step in graph.topological_steps()] == [root.id, child_one.id, child_two.id]
 
 

@@ -140,10 +140,9 @@ def trace_step(
                 "started_at": timestamp,
                 "ended_at": timestamp,
                 "safety_level": safety_level,
-                "parent_step_id": parent_step_id,
                 "input_payload": _apply_capture_policy(input_payload, active_run.capture_policy),
                 "output_payload": _apply_capture_policy(output_payload, active_run.capture_policy),
-                "attributes": raw_attributes,
+                "attributes": _with_scope_metadata(raw_attributes, parent_step_id),
                 "error_message": error_message,
                 "source_type": active_run.source_type,
                 "capture_policy": active_run.capture_policy,
@@ -151,44 +150,6 @@ def trace_step(
         )
     )
     normalize_and_persist(_COLLECTOR.flush())
-
-    if parent_step_id is not None:
-        _COLLECTOR.collect(
-            make_event(
-                event_id=str(uuid.uuid4()),
-                source_type="sdk",
-                source_name="capture",
-                event_kind="edge",
-                payload={
-                    "edge_id": str(uuid.uuid4()),
-                    "run_id": active_run.id,
-                    "source_step_id": parent_step_id,
-                    "target_step_id": step_id,
-                    "edge_type": EdgeType.PARENT_CHILD,
-                },
-            )
-        )
-
-    previous_step_id = active_run.last_step_id_by_parent.get(parent_step_id) if active_run.last_step_id_by_parent else None
-    if previous_step_id:
-        _COLLECTOR.collect(
-            make_event(
-                event_id=str(uuid.uuid4()),
-                source_type="sdk",
-                source_name="capture",
-                event_kind="edge",
-                payload={
-                    "edge_id": str(uuid.uuid4()),
-                    "run_id": active_run.id,
-                    "source_step_id": previous_step_id,
-                    "target_step_id": step_id,
-                    "edge_type": EdgeType.CONTROL_FLOW,
-                },
-            )
-        )
-    pending_edges = _COLLECTOR.flush()
-    if pending_edges:
-        normalize_and_persist(pending_edges)
 
     step = Step(
         id=step_id,
@@ -199,7 +160,7 @@ def trace_step(
         started_at=timestamp,
         ended_at=timestamp,
         safety_level=_coerce_safety_level(safety_level),
-        parent_step_id=parent_step_id,
+        parent_step_id=None,
         attributes=raw_attributes,
         error_message=error_message,
     )
@@ -343,6 +304,13 @@ def _apply_capture_policy(payload: Any, capture_policy: str) -> Any:
     if capture_policy == "metadata_only":
         return _payload_metadata(payload)
     return _payload_summary(payload)
+
+
+def _with_scope_metadata(attributes: dict[str, Any], parent_step_id: str | None) -> dict[str, Any]:
+    enriched = dict(attributes)
+    if parent_step_id is not None:
+        enriched["scope_parent_step_id"] = parent_step_id
+    return enriched
 
 
 def _coerce_safety_level(value: Any) -> SafetyLevel:
