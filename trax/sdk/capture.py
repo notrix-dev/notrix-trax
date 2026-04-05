@@ -181,16 +181,37 @@ class _RunScope:
     def __init__(self, name: str, input: Any = None, *, capture_policy: str = "summary") -> None:
         self._name = name
         self._input = input
+        self._output: Any = None
         self._capture_policy = capture_policy
         self.run: Run | None = None
         self._created_run = False
 
-    def __enter__(self) -> Run:
+    @property
+    def id(self) -> str:
+        if self.run is None:
+            raise RuntimeError("Run has not started yet.")
+        return self.run.id
+
+    @property
+    def name(self) -> str:
+        if self.run is None:
+            raise RuntimeError("Run has not started yet.")
+        return self.run.name
+
+    @property
+    def output(self) -> Any:
+        return self._output
+
+    @output.setter
+    def output(self, value: Any) -> None:
+        self._output = value
+
+    def __enter__(self) -> "_RunScope":
         if has_active_run():
             active_run = getattr(_STATE, "active_run", None)
             assert active_run is not None
             self.run = Run(id=active_run.id, name=active_run.name, status="running", started_at="")
-            return self.run
+            return self
         self.run = start_run(
             self._name,
             input_payload=self._input,
@@ -198,12 +219,12 @@ class _RunScope:
             capture_policy=self._capture_policy,
         )
         self._created_run = True
-        return self.run
+        return self
 
     def __exit__(self, exc_type: Any, exc: Any, _tb: Any) -> None:
         if not self._created_run:
             return
-        end_run(error_message=str(exc) if exc is not None else None)
+        end_run(output_payload=self._output, error_message=str(exc) if exc is not None else None)
 
 
 class _StepScope:
