@@ -49,6 +49,25 @@ def test_ergonomic_step_output_assignment_persists_artifact(tmp_path: Path, monk
     assert read_artifact(steps[0].output_artifact_ref)["preview"]["docs"][0]["id"] == "doc-1"
 
 
+def test_ergonomic_run_output_assignment_persists_run_artifact(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    with run("run-output-demo") as current_run:
+        with step(
+            "finalize",
+            input={"draft": "hello"},
+            attributes={"semantic_type": "transform", "safety_level": "safe_read"},
+        ) as traced:
+            traced.output = {"answer": "hello"}
+        current_run.output = {"answer": "hello", "mode": "demo"}
+
+    persisted = get_run(current_run.id)
+    assert persisted is not None
+    assert persisted.artifact_ref is not None
+    artifact = read_artifact(persisted.artifact_ref)
+    assert artifact == {"answer": "hello", "mode": "demo"}
+
+
 def test_traced_step_decorator_requires_active_run_and_records_step(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
 
