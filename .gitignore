@@ -12,6 +12,12 @@ dist/
 .venv/
 venv/
 
+# IDE and editor files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
 # Local Trax bootstrap paths
 .tmp-trax/
 .tmp-trax-example/
