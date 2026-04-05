@@ -394,6 +394,15 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
     step_by_id = {step.id: step for step in graph.steps}
     display_names = _display_name_by_step_id(graph.steps)
     allowed = allowed_step_ids if allowed_step_ids is not None else set(step_by_id)
+    control_flow_targets_by_source: dict[str, list[str]] = {}
+    for edge in graph.edges:
+        if edge.edge_type != EdgeType.CONTROL_FLOW:
+            continue
+        if edge.source_step_id not in allowed or edge.target_step_id not in allowed:
+            continue
+        control_flow_targets_by_source.setdefault(edge.source_step_id, []).append(edge.target_step_id)
+    for source_step_id, target_step_ids in control_flow_targets_by_source.items():
+        target_step_ids.sort(key=lambda step_id: step_by_id[step_id].position)
 
     def visit(step_id: str, depth: int) -> None:
         if step_id not in allowed:
@@ -404,9 +413,14 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
         node = graph.nodes[step_id]
         step = node.step
         indent = "  " * depth
-        relation = "root" if node.parent_step_id is None else f"parent={node.parent_step_id}"
-        lines.append(f"{indent}- [{step.position}] {display_names[step.id]} ({relation})")
-        for child_step_id in node.child_step_ids:
+        label = f"{indent}- [{step.position}] {display_names[step.id]}"
+        if depth == 1 and step.id in graph.root_step_ids:
+            label = f"{label} (root)"
+        lines.append(label)
+        child_step_ids = list(node.child_step_ids)
+        if not child_step_ids:
+            child_step_ids = control_flow_targets_by_source.get(step_id, [])
+        for child_step_id in child_step_ids:
             visit(child_step_id, depth + 1)
 
     if allowed_step_ids is None:

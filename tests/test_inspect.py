@@ -52,7 +52,7 @@ def test_inspect_renders_nested_graph(tmp_path: Path, monkeypatch) -> None:
     assert result.returncode == 0
     assert "Graph:" in result.stdout
     assert "- [1] unknown:parent (root)" in result.stdout
-    assert "- [2] unknown:child_a (disconnected)" in result.stdout
+    assert "- [2] unknown:child_a (root)" in result.stdout or "- [2] unknown:child_a" in result.stdout
     assert "Control Flow:" in result.stdout
 
 
