@@ -1,4 +1,4 @@
-# Notrix Trax — Replay Specification v1.1
+# Notrix Trax — Replay Specification
 
 **Status:** Stable  
 **Version:** 1.0.0  
