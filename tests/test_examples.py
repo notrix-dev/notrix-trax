@@ -56,6 +56,7 @@ def test_hero_diff_replay_example_creates_two_runs(tmp_path: Path) -> None:
     assert "changed" in run_ids
     diff_result = _run_cli(trax_home, "diff", run_ids["baseline"], run_ids["changed"])
     assert diff_result.returncode == 0
+    assert "transform:prepare_prompt" in diff_result.stdout
     assert "llm:generate_answer" in diff_result.stdout
     assert "key_config_changes" in diff_result.stdout
 
