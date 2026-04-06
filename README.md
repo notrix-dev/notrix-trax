@@ -1,26 +1,109 @@
-# notrix-trax
+# Notrix Trax
 
-Trax is a local-first AI debugging tool for capturing runs, reconstructing execution graphs, replaying behavior safely, and generating evidence-based explanations.
+Debug AI workflows when they change unexpectedly.
 
-Core concepts:
-- `Run`: one captured execution
-- `Step`: one traced unit of work inside a run
-- `Artifact`: persisted input/output payloads
-- `Edge`: relationships between steps in the execution graph
+Trace runs, diff executions, replay safely, and explain failures — locally.
+
+---
+
+When your LLM output changes, your agent behaves differently, or retrieval returns a different document…
+
+Logs don’t tell you:
+- what changed
+- where the graph diverged
+- which step caused the failure
+
+**Trax does.**
+
+---
+
+## 60-second demo
+
+```bash
+pip install notrix-trax
+
+trax list
+trax inspect <run_id>
+trax diff <run_a> <run_b>
+trax explain <run_id>
+trax replay <run_id> --start-at step_4 --stop-at step_8
+```
+
+Understand what changed. Reproduce only what matters. Fix faster.
+
+---
+
+## Example: LLM output changed unexpectedly
+
+Two runs produce different answers.
+
+Why?
+
+- prompt changed?
+- retrieval changed?
+- tool behavior changed?
+
+```bash
+trax diff run_1 run_2
+trax explain run_2
+```
+
+Trax shows:
+- graph differences
+- artifact changes
+- detected failure points
+- explanation grounded in evidence
+
+---
+
+## What Trax is (and isn’t)
+
+**Trax is a debugger, not an observability platform.**
+
+Not:
+- dashboards
+- metrics aggregation
+- logging pipelines
+
+Trax is for:
+- understanding why behavior changed
+- inspecting execution structure
+- replaying safely
+- explaining failures from evidence
+
+---
 
 ## Quickstart
 
 ```bash
 pip install -e .
 trax --help
-python examples/rag-example/app.py
+python examples/hero_diff_replay.py
+
 trax list
 trax inspect <run_id>
 trax replay <run_id>
 trax explain <run_id>
 ```
 
-The CLI stores metadata in local SQLite and artifacts on the filesystem under `TRAX_HOME` (default: `~/.trax`).
+Trax stores:
+- metadata in local SQLite
+- artifacts on the filesystem (`TRAX_HOME`, default: `~/.trax`)
+
+---
+
+## CLI Overview
+
+```bash
+trax list
+trax inspect <run_id>
+trax diff <run_id_1> <run_id_2>
+trax replay <run_id>
+trax explain <run_id>
+trax import-otel trace.json
+```
+
+---
 
 ## Minimal Adapter Usage
 
@@ -42,6 +125,8 @@ response = traced_chat(
 )
 ```
 
+---
+
 ## Ergonomic Capture
 
 ```python
@@ -57,40 +142,48 @@ with run("custom-flow", input={"question": "What does Trax do?"}):
         answer_step.set_output({"answer": "Trax debugs AI workflows locally."})
 ```
 
-## CLI Commands
+---
 
-```bash
-trax list
-trax inspect <run_id>
-trax diff <run_id_1> <run_id_2>
-trax replay <run_id>
-trax explain <run_id>
-trax import-otel trace.json
-```
+## LangGraph integration (first-class support)
 
-## LangGraph Execution-Boundary Integration
+Trace real LangGraph execution at the graph boundary:
+
+- invocation-level tracing
+- node-level tracing
+- no dependency on internal callbacks
+
+Works with real compiled graphs — not simulated execution.
 
 ```python
 from trax.langgraph import traced_invoke, traced_node
 from langgraph.graph import END, START, StateGraph
-```
 
-Use `traced_invoke(...)` at the compiled graph invocation boundary and `@traced_node(...)` on real node functions.
-
-```python
 graph = StateGraph(MyState)
-# add nodes and edges...
+# define nodes and edges...
 compiled = graph.compile()
+
 result = traced_invoke(compiled, {"question": "What does Trax do?"})
 ```
 
-This integration traces real LangGraph execution at the invocation and node boundary. It does not depend on LangGraph internal callbacks or runtime events.
+---
 
 ## Examples
 
-- `examples/rag-example/README.md`: retrieval + LLM flow using the adapter layer
-- `examples/agent-example/README.md`: simple multi-step workflow showing graph structure and a detectable failure
-- `examples/langgraph_basic.py`: real compiled LangGraph example using `traced_invoke(...)` and `@traced_node(...)`
+- `examples/basic_capture/README.md` — smallest manual SDK capture flow
+- `examples/rag_failure/README.md` — retrieval failure divergence across two runs
+- `examples/agent_loop/README.md` — structural/path divergence across two runs
+- `examples/langgraph_basic.py` — real LangGraph execution
+
+---
+
+## Core Concepts
+
+- **Run**: one captured execution  
+- **Step**: one traced unit of work  
+- **Artifact**: persisted input/output  
+- **Edge**: relationships between steps  
+
+---
 
 ## Development
 
@@ -98,3 +191,9 @@ This integration traces real LangGraph execution at the invocation and node boun
 pip install -e .
 pytest
 ```
+
+---
+
+## License
+
+Apache License 2.0
