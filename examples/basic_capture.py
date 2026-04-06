@@ -9,7 +9,7 @@ def main() -> None:
         "prepare-input",
         input_payload={"question": "hello"},
         output_payload={"normalized_question": "hello"},
-        attributes={"semantic_type": "transform"},
+        attributes={"semantic_type": "transform", "safety_level": "safe_read"},
     )
     end_run(output_payload={"run_id": run.id})
     print(run.id)
