@@ -137,12 +137,12 @@ Replay MUST enforce safety using `safety_level`.
 
 ```mermaid
 flowchart TD
-    A[Step] --> B{Safety Level}
-    B -->|safe_write| C[Allow]
-    B -->|safe_read| D[Allow (simulate)]
-    B -->|idempotent_write| E[Block]
-    B -->|unsafe_write| F[Block]
-    B -->|unknown| G[Block]
+    A["Step"] --> B{"Safety Level"}
+    B -->|"safe_write"| C["Allow"]
+    B -->|"safe_read"| D["Allow - simulate"]
+    B -->|"idempotent_write"| E["Block"]
+    B -->|"unsafe_write"| F["Block"]
+    B -->|"unknown"| G["Block"]
 ```
 
 ---
@@ -197,4 +197,3 @@ Replay depends on:
 - shadow execution
 - sandbox adapters
 - external system mocking
-

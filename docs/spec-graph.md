@@ -40,12 +40,12 @@ Implications:
 
 ```mermaid
 flowchart LR
-    A[Capture Signals] --> B[Collector]
-    B --> C[Normalizer]
-    C --> D[Canonical Steps]
-    D --> E[Edge Construction]
-    E --> F[Canonical Graph (Persisted)]
-    F --> G[Projection / CLI / Visualization]
+    A["Capture Signals"] --> B["Collector"]
+    B --> C["Normalizer"]
+    C --> D["Canonical Steps"]
+    D --> E["Edge Construction"]
+    E --> F["Canonical Graph - Persisted"]
+    F --> G["Projection / CLI / Visualization"]
 ```
 
 ### Explanation
@@ -115,15 +115,15 @@ These are treated as **metadata only**.
 
 ```mermaid
 flowchart LR
-    subgraph Canonical Structure
-        A[Step A] --> B[Step B]
-        B --> C[Step C]
+    subgraph "Canonical Structure"
+        A["Step A"] --> B["Step B"]
+        B --> C["Step C"]
     end
 
-    subgraph Metadata (Non-Structural)
-        D[Scope / Parent Hint]
-        E[Grouping]
-        F[Display Nesting]
+    subgraph "Metadata - Non-Structural"
+        D["Scope / Parent Hint"]
+        E["Grouping"]
+        F["Display Nesting"]
     end
 
     D -.-> B
@@ -272,4 +272,3 @@ Without a canonical, edge-driven graph:
 
 > The execution graph is the **source of truth** in Trax.
 > Everything else—display, explanation, and experience—is derived from it.
-
