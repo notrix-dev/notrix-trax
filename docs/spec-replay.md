@@ -179,7 +179,6 @@ Replay depends on:
 - safety_level (step schema)
 - policy rules (engine)
 
-As defined in architecture spec v1 and v1.5 fileciteturn6file0 fileciteturn6file1
 
 ---
 
