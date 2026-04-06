@@ -1,4 +1,4 @@
-# Notrix Trax — Adapter Specification v1.1
+# Notrix Trax — Adapter Specification
 
 **Status:** Stable  
 **Version:** 1.0.0  

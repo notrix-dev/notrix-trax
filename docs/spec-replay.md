@@ -112,7 +112,7 @@ Replay MUST enforce safety using `safety_level`.
 |------|---------|
 | safe_write | allowed |
 | safe_read | allowed (simulation only) |
-| idempotent_write | blocked in v1.5 |
+| idempotent_write | blocked in current version |
 | unsafe_write | blocked |
 | unknown | blocked |
 

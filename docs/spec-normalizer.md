@@ -1,7 +1,7 @@
 # Notrix Trax — Normalizer Specification
 
 **Status:** Stable  
-**Version:** 1.1.0  
+**Version:** 1.0.0  
 **Last Updated:** 2026-04-06  
 **Maintainers:** Notrix Core Team  
 **License:** Apache 2.0
@@ -19,7 +19,7 @@ It is responsible for:
 - assigning canonical step meaning
 - mapping framework-specific payloads into Trax records
 - normalizing safety and artifact references
-- constructing canonical fallback `control_flow` edges where required by v1.5
+- constructing canonical fallback `control_flow` edges
 - preserving source facts while preventing source-specific semantics from leaking into canonical truth
 
 The Normalizer MUST NOT:
@@ -160,7 +160,7 @@ Canonical step naming follows:
 <semantic_type>:<operation>
 ```
 
-### Canonical semantic domains currently supported in v1.5
+### Canonical semantic domains currently supported
 
 - `llm`
 - `retrieval`
@@ -227,7 +227,7 @@ Semantic mapping MUST NOT be:
 - hidden heuristic behavior
 - dependent on projection or UI nesting
 
-This document does not claim broader semantic domains are normalized today beyond the currently implemented v1.5 surface.
+This document does not claim broader semantic domains are normalized today beyond the currently implemented surface.
 
 ---
 
@@ -270,7 +270,7 @@ Source metadata remains **non-canonical**, unless explicitly promoted into a nor
 
 ## 10. Edges and Edge-Relevant Evidence
 
-The Normalizer participates in edge construction in a limited but real way in v1.5.
+The Normalizer participates in edge construction in a limited but real way in current version..
 
 It may consume and classify:
 
@@ -295,7 +295,7 @@ flowchart LR
 - imported relationship evidence is not automatically canonical truth
 - source parent/child relationships remain evidence unless promoted by normalization rules
 - scope hints alone MUST NOT create canonical edges
-- fallback `control_flow` edges MAY be created directly by normalization in v1.5
+- fallback `control_flow` edges MAY be created directly by normalization
 - stronger evidence should take precedence over fallback
 
 This preserves the architectural rule that edges are the structural truth of the system.
@@ -429,7 +429,7 @@ Feeds into:
 ### Responsibility Boundary
 
 - **Adapter** defines how source signals are emitted
-- **Normalizer** defines how source signals become canonical meaning and may construct fallback edges in v1.5
+- **Normalizer** defines how source signals become canonical meaning and may construct fallback edges
 - **Graph** defines structural truth over the canonical edge set
 
 ---

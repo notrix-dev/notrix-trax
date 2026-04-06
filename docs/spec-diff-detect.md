@@ -1,4 +1,4 @@
-# Notrix Trax — Diff & Detect Specification v1.1
+# Notrix Trax — Diff & Detect Specification
 
 **Status:** Stable  
 **Version:** 1.0.0  
