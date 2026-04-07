@@ -243,7 +243,7 @@ python examples/hero_diff_replay.py
 ## Development
 
 ```bash
-git clone https://github.com/NotrixLLC/notrix-trax.git
+git clone https://github.com/notrix-dev/notrix-trax.git
 cd notrix-trax
 pip install -e .
 pip install -r requirements.txt
