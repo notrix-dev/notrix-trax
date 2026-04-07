@@ -56,7 +56,23 @@ def style_status(status: str) -> str:
 
 
 def style_diff_kind(kind: str) -> str:
+    if kind == "+":
+        return style(kind, GREEN)
+    if kind == "-":
+        return style(kind, RED)
+    if kind == "~":
+        return style(kind, YELLOW)
     return style_status(kind)
+
+
+def style_diff_step_name(step_name: str, kind: str) -> str:
+    if kind == "+":
+        return style(step_name, GREEN)
+    if kind == "-":
+        return style(step_name, RED)
+    if kind == "~":
+        return style(step_name, YELLOW)
+    return step_name
 
 
 def style_safety_level(level: str) -> str:

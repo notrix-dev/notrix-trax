@@ -161,6 +161,8 @@ def _detect_latency_anomaly(run: Run, graph: RunGraph) -> list[Failure]:
 
 
 def _retrieved_docs(payload: Any) -> list[Any] | None:
+    if isinstance(payload, dict) and "preview" in payload and isinstance(payload["preview"], (dict, list)):
+        payload = payload["preview"]
     if isinstance(payload, dict):
         for key in ("docs", "documents", "results", "items"):
             value = payload.get(key)

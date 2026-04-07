@@ -54,6 +54,8 @@ def retrieve_docs(query: str) -> list[dict[str, object]]:
         score = len(query_terms & text_terms)
         scored_docs.append((score, doc))
     ranked = sorted(scored_docs, key=lambda item: (-item[0], item[1]["id"]))
+    if ranked and ranked[0][0] < 3:
+        return []
     return [
         {
             "id": doc["id"],
@@ -77,6 +79,20 @@ def explain_retrieval(query: str, docs: list[dict[str, object]]) -> dict[str, ob
         if not concept_tokens[concept] & query_terms
     ]
     key_missing_concept = ranked_missing_concepts[0] if ranked_missing_concepts else None
+    if not docs:
+        missing_label = TARGET_CONCEPTS[key_missing_concept] if key_missing_concept is not None else None
+        return {
+            "missing_query_concept": missing_label,
+            "ranking_reason": (
+                f"Query is missing '{missing_label}', so no document reached the retrieval threshold."
+                if missing_label is not None
+                else "Query did not provide enough overlap for retrieval."
+            ),
+            "selected_doc_id": None,
+            "selected_doc_score": 0,
+            "selected_doc_incomplete_concepts": list(TARGET_CONCEPTS.values()),
+            "incomplete_reason": "No document was retrieved, so the workflow has no supporting evidence.",
+        }
     top_doc = docs[0]
     top_doc_concepts = set(top_doc["concepts"])
     selected_doc_incomplete_concepts = [
@@ -130,6 +146,8 @@ def join_facts(facts: list[str]) -> str:
 
 
 def generate_answer(docs: list[dict[str, object]]) -> str:
+    if not docs:
+        return "Trax could not be fully described from the retrieved evidence."
     primary_doc = docs[0]
     primary_facts = extract_facts(primary_doc)[:2]
     return f"Trax {join_facts(primary_facts)}."

@@ -191,7 +191,7 @@ docs/             # spec system — source of truth for system behavior
 1. **Fork and clone the repo.** Click **Fork** on GitHub, then clone your fork locally.
    ```bash
    git clone https://github.com/<your-username>/trax.git
-   cd trax
+   cd notrix-trax
    git remote add upstream https://github.com/NotrixLLC/notrix-trax.git
    ```
    Adding `upstream` lets you pull in future changes from the main repo:
