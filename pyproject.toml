@@ -9,7 +9,7 @@ description = "Local-first AI debugging tool for capture, replay, diff, and expl
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-  { name = "Notrix" }
+  { name="Notrix LLC", email="support@notrix.dev" }
 ]
 license = { text = "Apache-2.0" }
 keywords = ["ai", "debugging", "tracing", "replay", "observability"]
