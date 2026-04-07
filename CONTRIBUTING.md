@@ -23,7 +23,7 @@ This guide explains how to contribute effectively — whether you're fixing a bu
 
 ## 1. Before You Start
 
-**Good first issues** are tagged [`#good-first-issue`](https://github.com/NotrixLLC/notrix-trax/issues?q=is%3Aissue+label%3A%22good+first+issue%22) on GitHub. If you want to work on something, leave a comment on the issue so others know.
+**Good first issues** are tagged [`#good-first-issue`](https://github.com/notrix-dev/notrix-trax/issues?q=is%3Aissue+label%3A%22good+first+issue%22) on GitHub. If you want to work on something, leave a comment on the issue so others know.
 
 For larger changes — new subsystems, changes to the normalizer or graph layer, or anything that touches a spec — **open an issue first**. This avoids doing work that doesn't align with the project's direction.
 
@@ -149,7 +149,7 @@ Bug fixes are always welcome. For bugs in the core system, please include a mini
 ## 4. Local Setup
 
 ```bash
-git clone https://github.com/NotrixLLC/notrix-trax.git
+git clone https://github.com/notrix-dev/notrix-trax.git
 cd notrix-trax
 
 pip install -e .
@@ -192,7 +192,7 @@ docs/             # spec system — source of truth for system behavior
    ```bash
    git clone https://github.com/<your-username>/trax.git
    cd notrix-trax
-   git remote add upstream https://github.com/NotrixLLC/notrix-trax.git
+   git remote add upstream https://github.com/notrix-dev/notrix-trax.git
    ```
    Adding `upstream` lets you pull in future changes from the main repo:
    ```bash
@@ -257,7 +257,7 @@ Examples:
 
 ## 7. Reporting Bugs
 
-Open a [GitHub Issue](https://github.com/NotrixLLC/notrix-trax/issues/new) with:
+Open a [GitHub Issue](https://github.com/notrix-dev/notrix-trax/issues/new) with:
 
 - A clear description of the unexpected behavior
 - Steps to reproduce (minimal reproduction preferred)
