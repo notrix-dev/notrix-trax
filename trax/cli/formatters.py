@@ -6,7 +6,7 @@ from trax.cli.theme import style_empty, style_header, style_label, style_verdict
 
 
 def section(title: str) -> str:
-    return style_header(title)
+    return f"\n{style_header(title)}"
 
 
 def field(label: str, value: object) -> str:

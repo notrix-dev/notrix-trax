@@ -130,7 +130,7 @@ def test_diff_cli_renders_readable_sections(tmp_path: Path, monkeypatch) -> None
     assert "Steps: 0 added, 1 modified, 0 removed, 0 unchanged" in result.stdout
     assert "── Step Diff (Execution Order) ──" in result.stdout
     assert "── Metrics ──" in result.stdout
-    assert "[MODIFIED] retrieval:faq_search" in result.stdout
+    assert "~ retrieval:faq_search" in result.stdout
     assert "(output: changed)" in result.stdout
     assert "top_k: 3 -> 5" in result.stdout
 
@@ -216,7 +216,7 @@ def test_diff_cli_renders_traversal_and_output_inline(tmp_path: Path, monkeypatc
     )
 
     assert result.returncode == 0
-    assert "[MODIFIED] llm:final_answer" in result.stdout
+    assert "~ llm:final_answer" in result.stdout
     assert "(traversal: 2 -> 3, output: changed)" in result.stdout
 
 

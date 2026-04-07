@@ -70,9 +70,12 @@ def test_rag_failure_example_creates_baseline_and_failed_runs(tmp_path: Path) ->
     assert "baseline" in run_ids
     assert "failed" in run_ids
     diff_result = _run_cli(trax_home, "diff", run_ids["baseline"], run_ids["failed"])
+    explain_result = _run_cli(trax_home, "explain", run_ids["failed"])
     assert diff_result.returncode == 0
+    assert explain_result.returncode == 0
     assert "retrieval:retrieve_docs" in diff_result.stdout
     assert "reasoning:explain_retrieval" in diff_result.stdout
+    assert "retrieval grounding failure" in explain_result.stdout.lower()
 
 
 def test_agent_loop_example_creates_structural_comparison_runs(tmp_path: Path) -> None:

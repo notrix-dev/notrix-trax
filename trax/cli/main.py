@@ -12,6 +12,7 @@ from trax.adapters.otel import import_trace
 from trax.cli.formatters import bullet, empty_state, field, section, verdict
 from trax.cli.theme import (
     style_diff_kind,
+    style_diff_step_name,
     style_empty,
     style_failure_header,
     style_safety_level,
@@ -169,7 +170,6 @@ def _export_graph(run_id: str, *, output_format: str, output_path: str | None) -
 def _list_runs(limit: int) -> int:
     runs = list_runs(limit=max(1, limit))
     print(verdict(_build_list_verdict(runs)))
-    print()
     print(section("Runs"))
     if not runs:
         print(empty_state("No runs found."))
@@ -291,7 +291,6 @@ def _replay_run(run_id: str, *, start_at: str | None = None, stop_at: str | None
         return 1
 
     print(verdict(_build_replay_verdict(result)))
-    print()
     print(section("Replay"))
     print(field("Replay", result.run_id))
     print(field("Status", style_status(result.status)))
@@ -324,7 +323,6 @@ def _explain_run(run_id: str, *, failure_kind: str | None = None, severity: str 
         )
     ]
     print(verdict(_build_explain_verdict(filtered_explanations or result.explanations)))
-    print()
     print(section("Run"))
     print(field("Run", result.run_id))
     if not filtered_explanations and (failure_kind or severity):
@@ -885,17 +883,18 @@ def _render_diff_step_flow(step_diffs: tuple[object, ...]) -> list[str]:
     display_names = _display_name_by_step_diff(step_diffs)
     metadata_column = max(
         (
-            len(f"[{step_diff.status}] {display_names[id(step_diff)]}")
+            len(f"{_diff_status_marker(step_diff.status)} {display_names[id(step_diff)]}")
             for step_diff in step_diffs
         ),
         default=0,
     ) + 2
     for step_diff in step_diffs:
         inline_notes = _diff_inline_notes(step_diff)
-        plain_prefix = f"[{step_diff.status}] {display_names[id(step_diff)]}"
+        marker = _diff_status_marker(step_diff.status)
+        plain_prefix = f"{marker} {display_names[id(step_diff)]}"
         line = (
-            f"[{style_diff_kind(step_diff.status)}] "
-            f"{style_step_name(display_names[id(step_diff)], step_diff.step_type)}"
+            f"{style_diff_kind(marker)} "
+            f"{style_diff_step_name(display_names[id(step_diff)], marker)}"
         )
         if inline_notes:
             line = _align_diff_metadata(line, plain_prefix, metadata_column, ", ".join(inline_notes))
@@ -921,6 +920,18 @@ def _print_diff_block(lines: list[str]) -> None:
     print()
     for line in lines:
         print(line)
+
+
+def _diff_status_marker(status: str) -> str:
+    if status == "MODIFIED":
+        return "~"
+    if status == "ADDED":
+        return "+"
+    if status in {"REMOVED", "DELETED"}:
+        return "-"
+    if status == "UNCHANGED":
+        return " "
+    return "?"
 
 
 def _align_diff_metadata(line: str, plain_prefix: str, metadata_column: int, metadata: str) -> str:

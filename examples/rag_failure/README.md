@@ -1,10 +1,10 @@
 # RAG Failure
 
 ## What this example shows
-A weaker query changes retrieval ranking, and the answer degrades because the workflow now sees incomplete evidence.
+A weaker query misses a key concept, retrieval returns no docs, and the answer degrades because the workflow now has no evidence.
 
 ## Why it matters
-In RAG systems, retrieval failures are often causal: query quality changes ranking, ranking changes evidence, and evidence changes the answer.
+In RAG systems, retrieval failures are often causal: query quality changes evidence, evidence changes the answer, and `trax explain` can surface the failure directly.
 
 ## Run it
 ```bash
@@ -20,7 +20,8 @@ trax explain <changed_run_id>
 
 ## What to notice
 - query rewrite changed
-- retrieval output changed
+- retrieval output became empty
 - `reasoning:explain_retrieval` shows why ranking changed
+- `trax explain` now surfaces a real retrieval failure instead of `No issues detected`
 - downstream answer changed
 - the divergence starts before generation
