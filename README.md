@@ -1,3 +1,8 @@
+[![CI](https://github.com/notrix-dev/notrix-trax/actions/workflows/ci.yml/badge.svg)](https://github.com/notrix-dev/notrix-trax/actions)
+[![PyPI version](https://img.shields.io/pypi/v/notrix-trax.svg)](https://pypi.org/project/notrix-trax/)
+[![Python](https://img.shields.io/pypi/pyversions/notrix-trax.svg)](https://pypi.org/project/notrix-trax/)
+[![License](https://img.shields.io/github/license/notrix-dev/notrix-trax.svg)](LICENSE)
+
 # Notrix Trax
 
 **Debug non-deterministic AI workflows — deterministically.**
