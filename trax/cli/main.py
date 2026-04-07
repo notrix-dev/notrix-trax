@@ -8,7 +8,16 @@ import sys
 from pathlib import Path
 
 from trax.adapters.otel import import_trace
-from trax.cli.formatters import bullet, empty_state, field, section
+from trax.cli.formatters import bullet, empty_state, field, section, verdict
+from trax.cli.theme import (
+    style_diff_kind,
+    style_empty,
+    style_failure_header,
+    style_safety_level,
+    style_status,
+    style_step_name,
+    style_verdict,
+)
 from trax.detect import DetectionError, analyze_run
 from trax.diff import DiffError, diff_runs
 from trax.explain import ExplainError, explain_run
@@ -151,6 +160,8 @@ def _export_graph(run_id: str, *, output_format: str, output_path: str | None) -
 
 def _list_runs(limit: int) -> int:
     runs = list_runs(limit=max(1, limit))
+    print(verdict(_build_list_verdict(runs)))
+    print()
     print(section("Runs"))
     if not runs:
         print(empty_state("No runs found."))
@@ -159,7 +170,7 @@ def _list_runs(limit: int) -> int:
     for run in runs:
         print(bullet(run.id))
         print(field("  Name", run.name))
-        print(field("  Status", run.status))
+        print(field("  Status", style_status(run.status)))
         print(field("  Started", run.started_at))
     return 0
 
@@ -188,21 +199,8 @@ def _inspect_run(
         print(f"Run not found: {run_id}", file=sys.stderr)
         return 1
 
-    print(section("Run"))
-    print(field("Run", run.id))
-    print(field("Name", run.name))
-    print(field("Status", run.status))
-    print(field("Started", run.started_at))
-    print(field("Ended", run.ended_at or "-"))
-    if run.artifact_ref:
-        print(field("Run Artifact", run.artifact_ref))
-        print(field("Run Artifact Summary", _summarize_artifact(run.artifact_ref)))
-    if run.error_message:
-        print(field("Run Error", run.error_message))
-
     steps = list_steps_for_run(run_id)
     edges = list_edges_for_run(run_id)
-    print(field("Steps", len(steps)))
     try:
         graph = build_run_graph(run_id, steps, edges)
     except GraphValidationError as exc:
@@ -217,11 +215,48 @@ def _inspect_run(
     )
     display_names = _display_name_by_step_id(graph.steps)
     filtered_step_ids = {step.id for step in filtered_steps}
+    try:
+        failures = analyze_run(run_id)
+    except DetectionError as exc:
+        print(f"Detector Note: {exc}")
+        failures = list_failures_for_run(run_id)
+    if step_type is not None or step_name is not None or step_status is not None:
+        failures = [
+            failure for failure in failures if failure.step_id is None or failure.step_id in filtered_step_ids
+        ]
+    root_segments = len(
+        [
+            root_step_id
+            for root_step_id in graph.root_step_ids
+            if step_type is None and step_name is None and step_status is None or root_step_id in filtered_step_ids
+        ]
+    )
+    print(verdict(_build_inspect_verdict(run.status, len(steps), len(failures), root_segments)))
+    print()
+    print(section("Run"))
+    print(field("Run", run.id))
+    print(field("Name", run.name))
+    print(field("Status", style_status(run.status)))
+    print(field("Started", run.started_at))
+    print(field("Ended", run.ended_at or "-"))
+    if run.artifact_ref:
+        print(field("Run Artifact", run.artifact_ref))
+        print(field("Run Artifact Summary", _summarize_artifact(run.artifact_ref)))
+    if run.error_message:
+        print(field("Run Error", run.error_message))
+    print(field("Steps", len(steps)))
+    print()
     print(section("Step Details"))
     if not filtered_steps:
         print(empty_state(_no_steps_message(step_type=step_type, step_name=step_name, step_status=step_status)))
     for step in filtered_steps:
-        print(bullet(f"[{step.position}] {display_names[step.id]} ({step.status})"))
+        print(
+            bullet(
+                f"[{step.position}] "
+                f"{style_step_name(display_names[step.id], _semantic_type_value(step.attributes.get('semantic_type')))} "
+                f"({style_status(step.status)})"
+            )
+        )
         if step.input_artifact_ref:
             print(field("  input", step.input_artifact_ref))
             print(field("  input_summary", _summarize_artifact(step.input_artifact_ref)))
@@ -241,21 +276,19 @@ def _inspect_run(
     else:
         for line in _render_graph(graph):
             print(line)
-    try:
-        failures = analyze_run(run_id)
-    except DetectionError as exc:
-        print(f"Detector Note: {exc}")
-        failures = list_failures_for_run(run_id)
-    if step_type is not None or step_name is not None or step_status is not None:
-        failures = [
-            failure for failure in failures if failure.step_id is None or failure.step_id in filtered_step_ids
-        ]
-    print(section("Failures"))
+    print()
+    print(style_failure_header("Failures", has_failures=bool(failures)))
     if not failures:
-        print("  (none)")
+        print(f"  {style_empty('(none)')}")
     else:
         for failure in failures:
-            print(bullet(f"[{failure.severity}/{failure.confidence}] {failure.kind}", indent=1))
+            print(
+                bullet(
+                    f"[{style_status(failure.severity)}/{style_status(failure.confidence)}] "
+                    f"{style_status(str(failure.kind))}",
+                    indent=1,
+                )
+            )
             print(field("    summary", failure.summary))
             if failure.step_id:
                 print(field("    step_id", failure.step_id))
@@ -269,12 +302,20 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
+    print(verdict(_build_diff_verdict(result)))
+    print()
     print(section("Summary"))
     print(field("  steps_added", result.summary.added_steps))
     print(field("  steps_removed", result.summary.removed_steps))
     print(field("  steps_modified", result.summary.modified_steps))
     print(field("  steps_unchanged", result.summary.unchanged_steps))
-    print(field("  output_changed", "yes" if result.summary.output_changed else "no"))
+    output_changed = "yes" if result.summary.output_changed else "no"
+    print(
+        field(
+            "  output_changed",
+            style_verdict(output_changed, "changed" if result.summary.output_changed else "stable"),
+        )
+    )
     if result.summary.key_config_changes:
         print(field("  key_config_changes", ", ".join(result.summary.key_config_changes)))
     if result.topology_changes:
@@ -282,7 +323,10 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
 
     print(section("Step Diff"))
     for step_diff in result.step_diffs:
-        print(f"[{step_diff.status}] {step_diff.display_name}")
+        print(
+            f"[{style_diff_kind(step_diff.status)}] "
+            f"{style_step_name(step_diff.display_name, step_diff.step_type)}"
+        )
         if step_diff.attribute_changes:
             print("  attrs:")
             for change in step_diff.attribute_changes:
@@ -314,16 +358,18 @@ def _replay_run(run_id: str, *, start_at: str | None = None, stop_at: str | None
         print(str(exc), file=sys.stderr)
         return 1
 
+    print(verdict(_build_replay_verdict(result)))
+    print()
     print(section("Replay"))
     print(field("Replay", result.run_id))
-    print(field("Status", result.status))
+    print(field("Status", style_status(result.status)))
     print(field("Replay Window", f"{result.window.start_at or 'run-start'} -> {result.window.stop_at or 'run-end'}"))
     print(field("Simulated Steps", result.simulated_count))
     print(field("Blocked Steps", result.blocked_count))
     print(field("Skipped Steps", result.skipped_count))
     for step in result.step_results:
-        print(f"[{step.status}] {step.step_name}")
-        print(f"  safety_level: {step.safety_level}")
+        print(f"[{style_status(step.status)}] {style_step_name(step.step_name)}")
+        print(f"  safety_level: {style_safety_level(step.safety_level)}")
         print(f"  source: {step.source}")
         print(f"  detail: {step.detail}")
     return 1 if result.blocked_count else 0
@@ -335,9 +381,6 @@ def _explain_run(run_id: str, *, failure_kind: str | None = None, severity: str 
     except ExplainError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-
-    print(section("Run"))
-    print(field("Run", result.run_id))
     failures_by_id = {failure.id: failure for failure in list_failures_for_run(run_id)}
     filtered_explanations = [
         explanation
@@ -348,6 +391,10 @@ def _explain_run(run_id: str, *, failure_kind: str | None = None, severity: str 
             severity=severity,
         )
     ]
+    print(verdict(_build_explain_verdict(filtered_explanations or result.explanations)))
+    print()
+    print(section("Run"))
+    print(field("Run", result.run_id))
     if not filtered_explanations and (failure_kind or severity):
         print(empty_state(_no_failures_message(failure_kind=failure_kind, severity=severity)))
         return 0
@@ -360,9 +407,18 @@ def _explain_run(run_id: str, *, failure_kind: str | None = None, severity: str 
     for explanation in filtered_explanations:
         failure = failures_by_id.get(explanation.failure_id)
         print()
-        print(field("Failure", explanation.diagnosis))
+        print(field("Failure", style_status(str(explanation.diagnosis))))
         if explanation.step_id and explanation.step_id in steps_by_id:
-            print(field("Step", display_names[explanation.step_id]))
+            step = steps_by_id[explanation.step_id]
+            print(
+                field(
+                    "Step",
+                    style_step_name(
+                        display_names[explanation.step_id],
+                        _semantic_type_value(step.attributes.get("semantic_type")),
+                    ),
+                )
+            )
         elif failure is not None and failure.step_id:
             print(field("Step", failure.step_id))
         print(section("Likely causes"))
@@ -414,6 +470,7 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
         step = node.step
         indent = "  " * depth
         label = f"{indent}- [{step.position}] {display_names[step.id]}"
+        label = f"{indent}- [{step.position}] {style_step_name(display_names[step.id], _semantic_type_value(step.attributes.get('semantic_type')))}"
         if depth == 1 and step.id in graph.root_step_ids:
             label = f"{label} (root)"
         lines.append(label)
@@ -433,7 +490,11 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
 
     orphaned = [step for step in graph.steps if step.id in allowed and step.id not in visited]
     for step in orphaned:
-        lines.append(f"  - [{step.position}] {display_names[step.id]} (disconnected)")
+        lines.append(
+            f"  - [{step.position}] "
+            f"{style_step_name(display_names[step.id], _semantic_type_value(step.attributes.get('semantic_type')))} "
+            "(disconnected)"
+        )
 
     control_flow_edges = [
         edge
@@ -448,7 +509,8 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
             source = step_by_id[edge.source_step_id]
             target = step_by_id[edge.target_step_id]
             lines.append(
-                f"    - [{source.position}] {display_names[source.id]} -> [{target.position}] {display_names[target.id]}"
+                f"    - [{source.position}] {style_step_name(display_names[source.id], _semantic_type_value(source.attributes.get('semantic_type')))} "
+                f"-> [{target.position}] {style_step_name(display_names[target.id], _semantic_type_value(target.attributes.get('semantic_type')))}"
             )
 
     return lines
@@ -551,6 +613,78 @@ def _no_failures_message(*, failure_kind: str | None, severity: str | None) -> s
     if severity is not None:
         filters.append(f"severity={severity}")
     return f"No failures matched filter: {', '.join(filters)}"
+
+
+def _build_list_verdict(runs: list[object]) -> str:
+    if not runs:
+        return "no runs found"
+    completed = sum(1 for run in runs if getattr(run, "status", None) == "completed")
+    failed = sum(1 for run in runs if getattr(run, "status", None) == "failed")
+    parts = [f"{len(runs)} runs found"]
+    status_parts: list[str] = []
+    if completed:
+        status_parts.append(f"{completed} completed")
+    if failed:
+        status_parts.append(f"{failed} failed")
+    if status_parts:
+        parts.append(", ".join(status_parts))
+    return ", ".join(parts)
+
+
+def _build_inspect_verdict(status: str, step_count: int, failure_count: int, root_segments: int) -> str:
+    parts = [f"{status} run", f"{step_count} steps"]
+    if failure_count:
+        parts.append(f"{failure_count} failures detected")
+    else:
+        parts.append("no failures")
+    if root_segments > 1:
+        parts.append(f"graph contains {root_segments} root segments")
+    return ", ".join(parts)
+
+
+def _build_diff_verdict(result: object) -> str:
+    parts: list[str] = []
+    if getattr(result.summary, "output_changed", False):
+        parts.append("output changed")
+    added = getattr(result.summary, "added_steps", 0)
+    removed = getattr(result.summary, "removed_steps", 0)
+    modified = getattr(result.summary, "modified_steps", 0)
+    if modified:
+        parts.append(f"{modified} steps modified")
+    elif added:
+        parts.append(f"{added} steps added")
+    elif removed:
+        parts.append(f"{removed} steps removed")
+    if getattr(result, "topology_changes", ()):
+        parts.append("topology changed")
+    if not parts:
+        return "no material change detected"
+    return ", ".join(parts)
+
+
+def _build_explain_verdict(explanations: tuple[object, ...] | list[object]) -> str:
+    if not explanations:
+        return "no issues detected"
+    top = explanations[0]
+    diagnosis = str(getattr(top, "diagnosis", "issue")).replace("_", " ")
+    noun = "issue" if len(explanations) == 1 else "issues"
+    return f"{len(explanations)} {noun} detected, likely caused by {diagnosis}"
+
+
+def _build_replay_verdict(result: object) -> str:
+    if getattr(result, "blocked_count", 0):
+        return "replay blocked by unsafe steps"
+    if getattr(result, "skipped_count", 0):
+        return f"partial replay completed, {getattr(result, 'simulated_count', 0)} steps executed"
+    return "replay completed safely"
+
+
+def _build_graph_verdict(*, step_count: int, edge_count: int, disconnected_segments: int) -> str:
+    if step_count == 0:
+        return "empty graph"
+    if disconnected_segments > 0:
+        return f"graph rendered, {disconnected_segments + 1} disconnected segments"
+    return f"graph rendered with {step_count} steps and {edge_count} edges"
 
 
 if __name__ == "__main__":
