@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from trax.cli.theme import style_empty, style_header, style_label, style_verdict_line
+
 
 def section(title: str) -> str:
-    return f"{title}:"
+    return style_header(title)
 
 
 def field(label: str, value: object) -> str:
-    return f"{label}: {value}"
+    return f"{style_label(label)}: {value}"
 
 
 def bullet(text: str, indent: int = 0) -> str:
@@ -16,4 +18,8 @@ def bullet(text: str, indent: int = 0) -> str:
 
 
 def empty_state(message: str) -> str:
-    return message
+    return style_empty(message)
+
+
+def verdict(message: str) -> str:
+    return style_verdict_line(f"Verdict: {message}")

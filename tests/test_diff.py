@@ -124,11 +124,100 @@ def test_diff_cli_renders_readable_sections(tmp_path: Path, monkeypatch) -> None
     )
 
     assert result.returncode == 0
-    assert "Summary" in result.stdout
-    assert "Step Diff" in result.stdout
-    assert "Metrics" in result.stdout
+    assert "── Impact Summary ──" in result.stdout
+    assert "Output: CHANGED" in result.stdout
+    assert "Topology: UNCHANGED" in result.stdout
+    assert "Steps: 0 added, 1 modified, 0 removed, 0 unchanged" in result.stdout
+    assert "── Step Diff (Execution Order) ──" in result.stdout
+    assert "── Metrics ──" in result.stdout
     assert "[MODIFIED] retrieval:faq_search" in result.stdout
+    assert "(output: changed)" in result.stdout
     assert "top_k: 3 -> 5" in result.stdout
+
+
+def test_diff_cli_disambiguates_repeated_step_names_with_suffixes(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    before = _persist_run(
+        "loop-before",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:01+00:00",
+        output_payload={"answer": "old"},
+        steps=[
+            _step("transform:rewrite_query", 1, attributes={"semantic_type": "transform"}, output_payload={"query": "one"}),
+            _step("retrieval:knowledge_lookup", 2, attributes={"semantic_type": "retrieval"}, output_payload={"docs": ["a"]}),
+            _step("llm:final_answer", 3, attributes={"semantic_type": "llm"}, output_payload={"answer": "old"}),
+        ],
+        edges=[("control_flow", 0, 1), ("control_flow", 1, 2)],
+    )
+    after = _persist_run(
+        "loop-after",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:02+00:00",
+        output_payload={"answer": "new"},
+        steps=[
+            _step("transform:rewrite_query", 1, attributes={"semantic_type": "transform"}, output_payload={"query": "one"}),
+            _step("retrieval:knowledge_lookup", 2, attributes={"semantic_type": "retrieval"}, output_payload={"docs": ["a"]}),
+            _step("transform:rewrite_query", 3, attributes={"semantic_type": "transform"}, output_payload={"query": "two"}),
+            _step("retrieval:knowledge_lookup", 4, attributes={"semantic_type": "retrieval"}, output_payload={"docs": ["b"]}),
+            _step("llm:final_answer", 5, attributes={"semantic_type": "llm"}, output_payload={"answer": "new"}),
+        ],
+        edges=[("control_flow", 0, 1), ("control_flow", 1, 2), ("control_flow", 2, 3), ("control_flow", 3, 4)],
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "diff", before.id, after.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert "transform:rewrite_query#1" in result.stdout
+    assert "transform:rewrite_query#2" in result.stdout
+    assert "retrieval:knowledge_lookup#1" in result.stdout
+    assert "retrieval:knowledge_lookup#2" in result.stdout
+
+
+def test_diff_cli_renders_traversal_and_output_inline(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    before = _persist_run(
+        "inline-before",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:01+00:00",
+        output_payload={"answer": "old"},
+        steps=[
+            _step("transform:rewrite_query", 1, attributes={"semantic_type": "transform"}, output_payload={"query": "one"}),
+            _step("llm:final_answer", 2, attributes={"semantic_type": "llm"}, output_payload={"answer": "old"}),
+        ],
+        edges=[("control_flow", 0, 1)],
+    )
+    after = _persist_run(
+        "inline-after",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:02+00:00",
+        output_payload={"answer": "new"},
+        steps=[
+            _step("transform:rewrite_query", 1, attributes={"semantic_type": "transform"}, output_payload={"query": "one"}),
+            _step("reasoning:assess_progress", 2, attributes={"semantic_type": "reasoning"}, output_payload={"retry": True}),
+            _step("llm:final_answer", 3, attributes={"semantic_type": "llm"}, output_payload={"answer": "new"}),
+        ],
+        edges=[("control_flow", 0, 1), ("control_flow", 1, 2)],
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "diff", before.id, after.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert "[MODIFIED] llm:final_answer" in result.stdout
+    assert "(traversal: 2 -> 3, output: changed)" in result.stdout
 
 
 def _persist_run(
