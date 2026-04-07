@@ -25,11 +25,15 @@ def test_inspect_prints_run_and_step_details(tmp_path: Path, monkeypatch) -> Non
     )
 
     assert result.returncode == 0
-    assert f"Run: {run.id}" in result.stdout
-    assert "Name: cli-demo" in result.stdout
-    assert "- [1] unknown:step_one (completed)" in result.stdout
-    assert "Graph:" in result.stdout
-    assert "- [1] unknown:step_one (root)" in result.stdout
+    assert result.stdout.splitlines()[0].startswith("Verdict:")
+    assert "── Run Summary ──" in result.stdout
+    assert "Status: COMPLETED" in result.stdout
+    assert "Duration:" not in result.stdout
+    assert "── Execution Path ──" in result.stdout
+    assert "[1] unknown:step_one" in result.stdout
+    assert "── Step Details ──" in result.stdout
+    assert "input:  a=1" in result.stdout
+    assert "output: b=2" in result.stdout
 
 
 def test_inspect_renders_nested_graph(tmp_path: Path, monkeypatch) -> None:
@@ -50,10 +54,9 @@ def test_inspect_renders_nested_graph(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert result.returncode == 0
-    assert "Graph:" in result.stdout
-    assert "- [1] unknown:parent (root)" in result.stdout
-    assert "- [2] unknown:child_a (root)" in result.stdout or "- [2] unknown:child_a" in result.stdout
-    assert "Execution Path:" in result.stdout
+    assert "── Execution Path ──" in result.stdout
+    assert "[1] unknown:parent" in result.stdout
+    assert "[2] unknown:child_a" in result.stdout
 
 
 def test_inspect_computes_duplicate_display_suffixes_without_persisting_them(tmp_path: Path, monkeypatch) -> None:
@@ -115,7 +118,40 @@ def test_inspect_filters_steps_and_handles_empty_state(tmp_path: Path, monkeypat
     )
 
     assert filtered.returncode == 0
-    assert "retrieval-step" in filtered.stdout
+    assert "retrieval:retrieval_step" in filtered.stdout
     assert "llm-step" not in filtered.stdout
     assert empty.returncode == 0
     assert "No steps matched filter: step_name=missing-step" in empty.stdout
+
+
+def test_inspect_prefers_preview_value_for_wrapped_artifact_payloads(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    run = start_run("preview-demo")
+    trace_step(
+        "rewrite-query",
+        input_payload={
+            "keys": ["attempt", "question"],
+            "preview": {"attempt": 1, "question": "What is Trax?"},
+            "type": "object",
+        },
+        output_payload={
+            "keys": ["attempt", "query"],
+            "preview": {"attempt": 1, "query": "trace workflow debugger"},
+            "type": "object",
+        },
+    )
+    end_run(output_payload={"done": True})
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "inspect", run.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert '"keys"' not in result.stdout
+    assert 'input:  attempt=1, question="What is Trax?"' in result.stdout
+    assert 'output: attempt=1, query="trace workflow debugger"' in result.stdout

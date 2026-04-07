@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from trax.adapters.otel import import_trace
@@ -232,55 +233,17 @@ def _inspect_run(
         ]
     )
     print(verdict(_build_inspect_verdict(run.status, len(steps), len(failures), root_segments)))
-    print()
-    print(section("Run"))
-    print(field("Run", run.id))
-    print(field("Name", run.name))
-    print(field("Status", style_status(run.status)))
-    print(field("Started", run.started_at))
-    print(field("Ended", run.ended_at or "-"))
-    if run.artifact_ref:
-        print(field("Run Artifact", run.artifact_ref))
-        print(field("Run Artifact Summary", _summarize_artifact(run.artifact_ref)))
-    if run.error_message:
-        print(field("Run Error", run.error_message))
-    print(field("Steps", len(steps)))
-    print()
-    print(section("Step Details"))
+    _print_diff_block(_render_inspect_run_summary(run, steps))
+    _print_diff_block(_render_inspect_execution_path(filtered_steps, display_names))
     if not filtered_steps:
+        print()
         print(empty_state(_no_steps_message(step_type=step_type, step_name=step_name, step_status=step_status)))
-    for step in filtered_steps:
-        print(
-            bullet(
-                f"[{step.position}] "
-                f"{style_step_name(display_names[step.id], _semantic_type_value(step.attributes.get('semantic_type')))} "
-                f"({style_status(step.status)})"
-            )
-        )
-        if step.input_artifact_ref:
-            print(field("  input", step.input_artifact_ref))
-            print(field("  input_summary", _summarize_artifact(step.input_artifact_ref)))
-        if step.output_artifact_ref:
-            print(field("  output", step.output_artifact_ref))
-            print(field("  output_summary", _summarize_artifact(step.output_artifact_ref)))
-        if step.attributes:
-            print(field("  attributes", step.attributes))
-        if step.error_message:
-            print(field("  error", step.error_message))
-    print(section("Graph"))
-    if not graph.steps:
-        print("  (empty)")
-    elif filtered_steps and (step_type is not None or step_name is not None or step_status is not None):
-        for line in _render_graph(graph, allowed_step_ids=filtered_step_ids):
-            print(line)
     else:
-        for line in _render_graph(graph):
-            print(line)
-    print()
-    print(style_failure_header("Failures", has_failures=bool(failures)))
-    if not failures:
-        print(f"  {style_empty('(none)')}")
-    else:
+        _print_diff_block(_render_inspect_step_details(filtered_steps, display_names))
+    _print_diff_block(_render_inspect_metrics(run))
+    if failures:
+        print()
+        print(style_failure_header("Failures", has_failures=True))
         for failure in failures:
             print(
                 bullet(
@@ -403,6 +366,173 @@ def _summarize_artifact(artifact_ref: str) -> str:
     if isinstance(payload, list):
         return f"list len={len(payload)}"
     return repr(payload)
+
+
+def _render_inspect_run_summary(run: object, steps: list[object]) -> list[str]:
+    lines = ["── Run Summary ──"]
+    lines.append(field("  Status", style_status(str(run.status).upper())))
+    lines.append(field("  Steps", len(steps)))
+    lines.append(field("  Started", _format_started_at(run.started_at)))
+    lines.append(field("  Output", _summarize_output_keys(run.artifact_ref)))
+    return lines
+
+
+def _render_inspect_execution_path(filtered_steps: list[object], display_names: dict[str, str]) -> list[str]:
+    lines = ["── Execution Path ──"]
+    if not filtered_steps:
+        lines.append("  (empty)")
+        return lines
+    path = " → ".join(
+        f"[{step.position}] {display_names[step.id]}"
+        for step in filtered_steps
+    )
+    lines.append(path)
+    return lines
+
+
+def _render_inspect_step_details(filtered_steps: list[object], display_names: dict[str, str]) -> list[str]:
+    lines = ["── Step Details ──"]
+    final_step_id = filtered_steps[-1].id if filtered_steps else None
+    for index, step in enumerate(filtered_steps):
+        marker = ""
+        if "assess_progress" in display_names[step.id]:
+            marker = "   ← loop"
+        elif step.id == final_step_id:
+            marker = "   ← final"
+        lines.append(
+            f"[{step.position}] "
+            f"{style_step_name(display_names[step.id], _semantic_type_value(step.attributes.get('semantic_type')))}"
+            f" ({style_status(step.status)}){marker}"
+        )
+        if step.input_artifact_ref:
+            lines.append(f"     input:  {_brief_artifact_summary(step.input_artifact_ref)}")
+        if step.output_artifact_ref:
+            lines.append(f"     output: {_brief_artifact_summary(step.output_artifact_ref)}")
+        attrs = _inspect_attrs_summary(step)
+        if attrs:
+            lines.append(f"     attrs:  {attrs}")
+        if step.error_message:
+            lines.append(f"     error:  {step.error_message}")
+        if index < len(filtered_steps) - 1:
+            lines.append("")
+    return lines
+
+
+def _render_inspect_metrics(run: object) -> list[str]:
+    lines = ["── Metrics ──"]
+    lines.append(f"latency_ms: {_duration_ms(run.started_at, run.ended_at)}")
+    lines.append("tokens: n/a")
+    lines.append("cost: n/a")
+    return lines
+
+
+def _brief_artifact_summary(artifact_ref: str) -> str:
+    try:
+        payload = read_artifact(artifact_ref)
+    except FileNotFoundError:
+        return "missing"
+    return _stringify_artifact_value(payload)
+
+
+def _inspect_attrs_summary(step: object) -> str:
+    parts: list[str] = []
+    semantic_type = _semantic_type_value(step.attributes.get("semantic_type"))
+    if semantic_type:
+        parts.append(str(semantic_type))
+    safety_level = step.attributes.get("safety_level") or getattr(step, "safety_level", None)
+    if safety_level:
+        parts.append(str(safety_level))
+    source_type = step.attributes.get("source_type")
+    if source_type:
+        parts.append(str(source_type))
+    return " · ".join(parts)
+
+
+def _summarize_output_keys(artifact_ref: str | None) -> str:
+    if not artifact_ref:
+        return "-"
+    try:
+        payload = read_artifact(artifact_ref)
+    except FileNotFoundError:
+        return "missing"
+    if isinstance(payload, dict) and payload:
+        return ", ".join(sorted(payload.keys()))
+    if isinstance(payload, dict):
+        return "object"
+    return type(payload).__name__
+
+
+def _format_started_at(value: str | None) -> str:
+    if not value:
+        return "-"
+    dt = _parse_iso_datetime(value)
+    if dt is None:
+        return value
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _format_duration(started_at: str | None, ended_at: str | None) -> str:
+    duration_ms = _duration_ms(started_at, ended_at)
+    return f"{duration_ms}ms" if duration_ms is not None else "-"
+
+
+def _duration_ms(started_at: str | None, ended_at: str | None) -> int | None:
+    start = _parse_iso_datetime(started_at)
+    end = _parse_iso_datetime(ended_at)
+    if start is None or end is None:
+        return None
+    return max(int((end - start).total_seconds() * 1000), 0)
+
+
+def _parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _stringify_artifact_value(payload: object) -> str:
+    # unwrap preview (keep this — it's legit)
+    if isinstance(payload, dict) and "preview" in payload:
+        payload = payload["preview"]
+
+    return _summarize(payload)
+
+
+def _summarize(value: object, *, max_fields: int = 3, max_len: int = 80) -> str:
+    if isinstance(value, dict):
+        items = []
+        for i, key in enumerate(sorted(value.keys())):
+            if i >= max_fields:
+                break
+            v = value[key]
+            items.append(f"{key}={_summarize_scalar(v)}")
+        result = ", ".join(items)
+        return result if len(result) <= max_len else f"{result[:max_len-3]}..."
+
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        # smart preview
+        first = value[0]
+        if isinstance(first, dict) and "id" in first:
+            return f"{len(value)} items ({first['id']})"
+        return f"{len(value)} items"
+
+    return _summarize_scalar(value)
+
+
+def _summarize_scalar(value: object) -> str:
+    if isinstance(value, str):
+        v = value if len(value) <= 60 else f"{value[:57]}..."
+        return f'"{v}"' 
+
+    if isinstance(value, bool):
+        return "true" if value else "false"
+
+    return str(value)
 
 
 def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> list[str]:
