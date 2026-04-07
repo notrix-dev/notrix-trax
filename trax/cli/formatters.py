@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from trax.cli.theme import style_empty, style_header, style_label
+from trax.cli.theme import style_empty, style_header, style_label, style_verdict_line
 
 
 def section(title: str) -> str:
@@ -22,4 +22,4 @@ def empty_state(message: str) -> str:
 
 
 def verdict(message: str) -> str:
-    return f"Verdict: {message}"
+    return style_verdict_line(f"Verdict: {message}")

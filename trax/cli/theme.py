@@ -89,6 +89,10 @@ def style_verdict(text: str, level: str) -> str:
     return str(text)
 
 
+def style_verdict_line(text: str) -> str:
+    return style(text, GREEN)
+
+
 def style_step_name(step_name: str, semantic_type: str | None = None) -> str:
     semantic = semantic_type or _semantic_type_from_name(step_name)
     if semantic == "llm":

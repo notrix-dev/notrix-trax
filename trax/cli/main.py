@@ -322,25 +322,29 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
         print(field("  topology_changes", len(result.topology_changes)))
 
     print(section("Step Diff"))
+    display_names = _display_name_by_step_diff(result.step_diffs)
     for step_diff in result.step_diffs:
-        print(
+        inline_notes: list[str] = []
+        if step_diff.reordered:
+            inline_notes.append(f"traversal: {step_diff.before_position} -> {step_diff.after_position}")
+        if step_diff.parent_changed:
+            inline_notes.append("topology: changed")
+        if step_diff.output_missing:
+            inline_notes.append("output: missing")
+        elif step_diff.output_changed:
+            inline_notes.append("output: changed")
+
+        line = (
             f"[{style_diff_kind(step_diff.status)}] "
-            f"{style_step_name(step_diff.display_name, step_diff.step_type)}"
+            f"{style_step_name(display_names[id(step_diff)], step_diff.step_type)}"
         )
+        if inline_notes:
+            line = f"{line}\t" + ", ".join(inline_notes)
+        print(line)
         if step_diff.attribute_changes:
             print("  attrs:")
             for change in step_diff.attribute_changes:
                 print(f"    {change.key}: {change.before} -> {change.after}")
-        if step_diff.reordered:
-            print(
-                f"  traversal: {step_diff.before_position} -> {step_diff.after_position}"
-            )
-        if step_diff.parent_changed:
-            print("  topology: parent/edge changed")
-        if step_diff.output_missing:
-            print("  output: missing")
-        elif step_diff.output_changed:
-            print("  output: changed")
 
     print(section("Metrics"))
     for metric in result.metrics:
@@ -562,21 +566,47 @@ def _semantic_type_value(value: object) -> str | None:
 
 def _display_name_by_step_id(steps: object) -> dict[str, str]:
     ordered_steps = sorted(list(steps), key=lambda step: (step.position, step.started_at, step.id))
-    counts: dict[tuple[str | None, str], int] = {}
-    totals: dict[tuple[str | None, str], int] = {}
+    return _display_name_map(
+        ordered_steps,
+        item_id=lambda step: step.id,
+        item_name=lambda step: step.name,
+        occurrence_key=lambda step: (step.parent_step_id, step.name),
+    )
 
-    for step in ordered_steps:
-        key = (step.parent_step_id, step.name)
+
+def _display_name_by_step_diff(step_diffs: object) -> dict[int, str]:
+    ordered_diffs = list(step_diffs)
+    return _display_name_map(
+        ordered_diffs,
+        item_id=id,
+        item_name=lambda step_diff: step_diff.display_name,
+        occurrence_key=lambda step_diff: step_diff.display_name,
+    )
+
+
+def _display_name_map(
+    items: list[object],
+    *,
+    item_id: object,
+    item_name: object,
+    occurrence_key: object,
+) -> dict[object, str]:
+    counts: dict[object, int] = {}
+    totals: dict[object, int] = {}
+
+    for item in items:
+        key = occurrence_key(item)
         totals[key] = totals.get(key, 0) + 1
 
-    display_names: dict[str, str] = {}
-    for step in ordered_steps:
-        key = (step.parent_step_id, step.name)
+    display_names: dict[object, str] = {}
+    for item in items:
+        key = occurrence_key(item)
+        name = item_name(item)
         counts[key] = counts.get(key, 0) + 1
         if totals[key] == 1:
-            display_names[step.id] = step.name
+            display_names[item_id(item)] = name
         else:
-            display_names[step.id] = f"{step.name}#{counts[key]}"
+            display_names[item_id(item)] = f"{name}#{counts[key]}"
     return display_names
 
 
