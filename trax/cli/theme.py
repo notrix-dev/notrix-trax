@@ -41,18 +41,18 @@ def style_label(text: str) -> str:
 def style_status(status: str) -> str:
     lowered = status.lower()
     if lowered in {"completed", "success"}:
-        return style(status, GREEN, BOLD)
+        return style(status, GREEN)
     if lowered in {"failed", "error", "failed_safety_policy", "blocked"}:
-        return style(status, RED, BOLD)
+        return style(status, RED)
     if lowered in {"partial", "warning", "unknown", "simulated", "modified"}:
-        return style(status, YELLOW, BOLD)
+        return style(status, YELLOW)
     if lowered in {"skipped", "unchanged"}:
         return style(status, DIM)
     if lowered in {"added"}:
-        return style(status, GREEN, BOLD)
+        return style(status, GREEN)
     if lowered in {"removed"}:
-        return style(status, RED, BOLD)
-    return style(status, BOLD)
+        return style(status, RED)
+    return status
 
 
 def style_diff_kind(kind: str) -> str:
@@ -81,12 +81,12 @@ def style_empty(text: str) -> str:
 def style_verdict(text: str, level: str) -> str:
     lowered = level.lower()
     if lowered in {"good", "stable", "positive"}:
-        return style(text, GREEN, BOLD)
+        return style(text, GREEN)
     if lowered in {"warning", "changed", "caution"}:
-        return style(text, YELLOW, BOLD)
+        return style(text, YELLOW)
     if lowered in {"bad", "failed", "error"}:
-        return style(text, RED, BOLD)
-    return style(text, BOLD)
+        return style(text, RED)
+    return str(text)
 
 
 def style_step_name(step_name: str, semantic_type: str | None = None) -> str:
