@@ -19,7 +19,7 @@ jobs:
 
       - name: Install
         run: |
-          pip install -e .
+          python -m pip install -e . pytest build
 
       - name: CLI smoke test
         run: |
@@ -27,9 +27,8 @@ jobs:
 
       - name: Test suite
         run: |
-          pytest
+          python -m pytest
 
       - name: Build package
         run: |
-          pip install build
           python -m build
