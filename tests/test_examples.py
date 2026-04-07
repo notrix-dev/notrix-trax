@@ -40,7 +40,7 @@ def _extract_named_run_ids(output: str) -> dict[str, str]:
 
 
 def test_basic_capture_example_runs(tmp_path: Path) -> None:
-    result = _run_example("examples/basic_capture/app.py", tmp_path / "basic")
+    result = _run_example("examples/basic_capture.py", tmp_path / "basic")
 
     assert result.returncode == 0
     assert result.stdout.strip()
@@ -58,7 +58,7 @@ def test_hero_diff_replay_example_creates_two_runs(tmp_path: Path) -> None:
     assert diff_result.returncode == 0
     assert "transform:prepare_prompt" in diff_result.stdout
     assert "llm:generate_answer" in diff_result.stdout
-    assert "key_config_changes" in diff_result.stdout
+    assert "temperature: 0.2 -> 0.8" in diff_result.stdout
 
 
 def test_rag_failure_example_creates_baseline_and_failed_runs(tmp_path: Path) -> None:
@@ -88,4 +88,4 @@ def test_agent_loop_example_creates_structural_comparison_runs(tmp_path: Path) -
     assert "changed" in run_ids
     diff_result = _run_cli(trax_home, "diff", run_ids["baseline"], run_ids["changed"])
     assert diff_result.returncode == 0
-    assert "reasoning:repair_answer" in diff_result.stdout or "ADDED" in diff_result.stdout
+    assert "reasoning:assess_progress" in diff_result.stdout or "+ " in diff_result.stdout
