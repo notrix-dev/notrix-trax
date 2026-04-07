@@ -12,12 +12,12 @@ def test_readme_contains_quickstart_and_adapter_usage() -> None:
     assert "traced_chat" in readme
     assert "traced_retrieval" in readme
     assert "traced_invoke" in readme
-    assert "Trace real LangGraph execution at the graph boundary" in readme
+    assert "Invocation-level and node-level tracing" in readme
     assert "trax inspect <run_id>" in readme
 
 
 def test_examples_exist() -> None:
-    assert Path("examples/basic_capture/app.py").is_file()
+    assert Path("examples/basic_capture.py").is_file()
     assert Path("examples/rag_failure/app.py").is_file()
     assert Path("examples/agent_loop/app.py").is_file()
     assert Path("examples/langgraph_basic.py").is_file()
