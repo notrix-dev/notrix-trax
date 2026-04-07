@@ -57,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inspect a captured run.",
     )
     inspect_parser.add_argument("run_id", help="The captured run identifier.")
+    inspect_parser.add_argument(
+        "--view",
+        choices=["brief", "full", "raw"],
+        default="brief",
+        help="Display mode for inspect output.",
+    )
     inspect_parser.add_argument("--step-type", dest="step_type", help="Filter steps by semantic type.")
     inspect_parser.add_argument("--step-name", dest="step_name", help="Filter steps by exact step name.")
     inspect_parser.add_argument("--step-status", dest="step_status", help="Filter steps by persisted status.")
@@ -116,6 +122,7 @@ def main() -> int:
     if args.command == "inspect":
         return _inspect_run(
             args.run_id,
+            view=args.view,
             step_type=args.step_type,
             step_name=args.step_name,
             step_status=args.step_status,
@@ -191,6 +198,7 @@ def _import_otel(trace_path: str) -> int:
 def _inspect_run(
     run_id: str,
     *,
+    view: str = "brief",
     step_type: str | None = None,
     step_name: str | None = None,
     step_status: str | None = None,
@@ -239,7 +247,7 @@ def _inspect_run(
         print()
         print(empty_state(_no_steps_message(step_type=step_type, step_name=step_name, step_status=step_status)))
     else:
-        _print_diff_block(_render_inspect_step_details(filtered_steps, display_names))
+        _print_diff_block(_render_inspect_step_details(filtered_steps, display_names, view=view))
     _print_diff_block(_render_inspect_metrics(run))
     if failures:
         print()
@@ -390,7 +398,12 @@ def _render_inspect_execution_path(filtered_steps: list[object], display_names: 
     return lines
 
 
-def _render_inspect_step_details(filtered_steps: list[object], display_names: dict[str, str]) -> list[str]:
+def _render_inspect_step_details(
+    filtered_steps: list[object],
+    display_names: dict[str, str],
+    *,
+    view: str,
+) -> list[str]:
     lines = ["── Step Details ──"]
     final_step_id = filtered_steps[-1].id if filtered_steps else None
     for index, step in enumerate(filtered_steps):
@@ -405,9 +418,9 @@ def _render_inspect_step_details(filtered_steps: list[object], display_names: di
             f" ({style_status(step.status)}){marker}"
         )
         if step.input_artifact_ref:
-            lines.append(f"     input:  {_brief_artifact_summary(step.input_artifact_ref)}")
+            lines.extend(_render_inspect_artifact_lines("input", step.input_artifact_ref, view=view))
         if step.output_artifact_ref:
-            lines.append(f"     output: {_brief_artifact_summary(step.output_artifact_ref)}")
+            lines.extend(_render_inspect_artifact_lines("output", step.output_artifact_ref, view=view))
         attrs = _inspect_attrs_summary(step)
         if attrs:
             lines.append(f"     attrs:  {attrs}")
@@ -432,6 +445,19 @@ def _brief_artifact_summary(artifact_ref: str) -> str:
     except FileNotFoundError:
         return "missing"
     return _stringify_artifact_value(payload)
+
+
+def _render_inspect_artifact_lines(label: str, artifact_ref: str, *, view: str) -> list[str]:
+    try:
+        payload = read_artifact(artifact_ref)
+    except FileNotFoundError:
+        return [f"     {label}:  missing"]
+
+    if view == "raw":
+        return _render_artifact_raw(label, payload)
+    if view == "full":
+        return _render_artifact_full(label, payload)
+    return [f"     {label}:  {_stringify_artifact_value(payload)}"]
 
 
 def _inspect_attrs_summary(step: object) -> str:
@@ -499,6 +525,52 @@ def _stringify_artifact_value(payload: object) -> str:
         payload = payload["preview"]
 
     return _summarize(payload)
+
+
+def _render_artifact_full(label: str, payload: object) -> list[str]:
+    payload = _artifact_display_payload(payload)
+    lines = [f"     {label}:"]
+    lines.extend(f"       {line}" for line in _render_structured_value(payload))
+    return lines
+
+
+def _render_artifact_raw(label: str, payload: object) -> list[str]:
+    payload = _artifact_display_payload(payload)
+    lines = [f"     {label}:"]
+    rendered = json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True)
+    lines.extend(f"       {line}" for line in rendered.splitlines())
+    return lines
+
+
+def _artifact_display_payload(payload: object) -> object:
+    if isinstance(payload, dict) and "preview" in payload:
+        return payload["preview"]
+    return payload
+
+
+def _render_structured_value(value: object, *, indent: int = 0) -> list[str]:
+    prefix = "  " * indent
+    if isinstance(value, dict):
+        lines: list[str] = []
+        for key in sorted(value.keys()):
+            item = value[key]
+            if isinstance(item, dict):
+                lines.append(f"{prefix}{key}:")
+                lines.extend(_render_structured_value(item, indent=indent + 1))
+            else:
+                lines.append(f"{prefix}{key}={_render_structured_scalar(item)}")
+        return lines or [f"{prefix}{{}}"]
+    if isinstance(value, list):
+        return [f"{prefix}{_render_structured_scalar(value)}"]
+    return [f"{prefix}{_render_structured_scalar(value)}"]
+
+
+def _render_structured_scalar(value: object) -> str:
+    if isinstance(value, list):
+        if len(value) <= 4 and all(not isinstance(item, (dict, list)) for item in value):
+            return "[" + ", ".join(_summarize_scalar(item) for item in value) + "]"
+        return f"{len(value)} items"
+    return _summarize_scalar(value)
 
 
 def _summarize(value: object, *, max_fields: int = 3, max_len: int = 80) -> str:
