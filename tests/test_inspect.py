@@ -53,7 +53,7 @@ def test_inspect_renders_nested_graph(tmp_path: Path, monkeypatch) -> None:
     assert "Graph:" in result.stdout
     assert "- [1] unknown:parent (root)" in result.stdout
     assert "- [2] unknown:child_a (root)" in result.stdout or "- [2] unknown:child_a" in result.stdout
-    assert "Control Flow:" in result.stdout
+    assert "Execution Path:" in result.stdout
 
 
 def test_inspect_computes_duplicate_display_suffixes_without_persisting_them(tmp_path: Path, monkeypatch) -> None:

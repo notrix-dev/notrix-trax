@@ -302,56 +302,13 @@ def _diff_runs(run_id_1: str, run_id_2: str) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    print(verdict(_build_diff_verdict(result)))
-    print()
-    print(section("Summary"))
-    print(field("  steps_added", result.summary.added_steps))
-    print(field("  steps_removed", result.summary.removed_steps))
-    print(field("  steps_modified", result.summary.modified_steps))
-    print(field("  steps_unchanged", result.summary.unchanged_steps))
-    output_changed = "yes" if result.summary.output_changed else "no"
-    print(
-        field(
-            "  output_changed",
-            style_verdict(output_changed, "changed" if result.summary.output_changed else "stable"),
-        )
-    )
-    if result.summary.key_config_changes:
-        print(field("  key_config_changes", ", ".join(result.summary.key_config_changes)))
-    if result.topology_changes:
-        print(field("  topology_changes", len(result.topology_changes)))
-
-    print(section("Step Diff"))
-    display_names = _display_name_by_step_diff(result.step_diffs)
-    for step_diff in result.step_diffs:
-        inline_notes: list[str] = []
-        if step_diff.reordered:
-            inline_notes.append(f"traversal: {step_diff.before_position} -> {step_diff.after_position}")
-        if step_diff.parent_changed:
-            inline_notes.append("topology: changed")
-        if step_diff.output_missing:
-            inline_notes.append("output: missing")
-        elif step_diff.output_changed:
-            inline_notes.append("output: changed")
-
-        line = (
-            f"[{style_diff_kind(step_diff.status)}] "
-            f"{style_step_name(display_names[id(step_diff)], step_diff.step_type)}"
-        )
-        if inline_notes:
-            line = f"{line}\t" + ", ".join(inline_notes)
+    for line in _render_diff_header(run_id_1, run_id_2):
         print(line)
-        if step_diff.attribute_changes:
-            print("  attrs:")
-            for change in step_diff.attribute_changes:
-                print(f"    {change.key}: {change.before} -> {change.after}")
-
-    print(section("Metrics"))
-    for metric in result.metrics:
-        if metric.delta is None:
-            print(f"  {metric.name}: n/a")
-            continue
-        print(f"  {metric.name}: {_format_metric_delta(metric.name, metric.delta)}")
+    print()
+    print(_render_diff_verdict(result))
+    _print_diff_block(_render_diff_impact_summary(result))
+    _print_diff_block(_render_diff_step_flow(result.step_diffs))
+    _print_diff_block(_render_diff_metrics(result.metrics))
     return 0
 
 
@@ -508,7 +465,7 @@ def _render_graph(graph: object, allowed_step_ids: set[str] | None = None) -> li
         and edge.target_step_id in allowed
     ]
     if control_flow_edges:
-        lines.append("  Control Flow:")
+        lines.append("  Execution Path:")
         for edge in control_flow_edges:
             source = step_by_id[edge.source_step_id]
             target = step_by_id[edge.target_step_id]
@@ -690,6 +647,96 @@ def _build_diff_verdict(result: object) -> str:
     if not parts:
         return "no material change detected"
     return ", ".join(parts)
+
+
+def _render_diff_header(run_id_1: str, run_id_2: str) -> list[str]:
+    return [f"Diff: {run_id_1} → {run_id_2}"]
+
+
+def _render_diff_verdict(result: object) -> str:
+    return verdict(_build_diff_verdict(result))
+
+
+def _render_diff_impact_summary(result: object) -> list[str]:
+    topology_changed = bool(result.topology_changes)
+    topology_text = f"CHANGED ({len(result.topology_changes)} changes)" if topology_changed else "UNCHANGED"
+    return [
+        "── Impact Summary ──",
+        field(
+            "  Output",
+            style_verdict(
+                "CHANGED" if result.summary.output_changed else "UNCHANGED",
+                "changed" if result.summary.output_changed else "stable",
+            ),
+        ),
+        field("  Topology", style_verdict(topology_text, "changed" if topology_changed else "stable")),
+        field(
+            "  Steps",
+            f"{result.summary.added_steps} added, {result.summary.modified_steps} modified, "
+            f"{result.summary.removed_steps} removed, {result.summary.unchanged_steps} unchanged",
+        ),
+    ]
+
+
+def _render_diff_step_flow(step_diffs: tuple[object, ...]) -> list[str]:
+    lines = ["── Step Diff (Execution Order) ──"]
+    display_names = _display_name_by_step_diff(step_diffs)
+    metadata_column = max(
+        (
+            len(f"[{step_diff.status}] {display_names[id(step_diff)]}")
+            for step_diff in step_diffs
+        ),
+        default=0,
+    ) + 2
+    for step_diff in step_diffs:
+        inline_notes = _diff_inline_notes(step_diff)
+        plain_prefix = f"[{step_diff.status}] {display_names[id(step_diff)]}"
+        line = (
+            f"[{style_diff_kind(step_diff.status)}] "
+            f"{style_step_name(display_names[id(step_diff)], step_diff.step_type)}"
+        )
+        if inline_notes:
+            line = _align_diff_metadata(line, plain_prefix, metadata_column, ", ".join(inline_notes))
+        lines.append(line)
+        if step_diff.attribute_changes:
+            lines.append("  attrs:")
+            for change in step_diff.attribute_changes:
+                lines.append(f"    {change.key}: {change.before} -> {change.after}")
+    return lines
+
+
+def _render_diff_metrics(metrics: tuple[object, ...]) -> list[str]:
+    lines = ["── Metrics ──"]
+    for metric in metrics:
+        if metric.delta is None:
+            lines.append(f"  {metric.name}: n/a")
+        else:
+            lines.append(f"  {metric.name}: {_format_metric_delta(metric.name, metric.delta)}")
+    return lines
+
+
+def _print_diff_block(lines: list[str]) -> None:
+    print()
+    for line in lines:
+        print(line)
+
+
+def _align_diff_metadata(line: str, plain_prefix: str, metadata_column: int, metadata: str) -> str:
+    padding = max(metadata_column - len(plain_prefix), 2)
+    return f"{line}{' ' * padding}({metadata})"
+
+
+def _diff_inline_notes(step_diff: object) -> list[str]:
+    inline_notes: list[str] = []
+    if step_diff.reordered:
+        inline_notes.append(f"traversal: {step_diff.before_position} -> {step_diff.after_position}")
+    if step_diff.parent_changed:
+        inline_notes.append("topology: changed")
+    if step_diff.output_missing:
+        inline_notes.append("output: missing")
+    elif step_diff.output_changed:
+        inline_notes.append("output: changed")
+    return inline_notes
 
 
 def _build_explain_verdict(explanations: tuple[object, ...] | list[object]) -> str:
