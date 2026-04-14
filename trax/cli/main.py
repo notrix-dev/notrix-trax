@@ -902,7 +902,17 @@ def _render_diff_step_flow(step_diffs: tuple[object, ...]) -> list[str]:
         if step_diff.attribute_changes:
             lines.append("  attrs:")
             for change in step_diff.attribute_changes:
-                lines.append(f"    {change.key}: {change.before} -> {change.after}")
+                lines.extend(_render_diff_change(change, indent="    "))
+        visible_input_changes = _visible_input_changes(step_diff.input_changes)
+        if visible_input_changes:
+            lines.append("  input:")
+            for change in visible_input_changes:
+                lines.extend(_render_diff_change(change, indent="    "))
+        visible_output_changes = _visible_output_changes(step_diff.output_changes)
+        if visible_output_changes:
+            lines.append("  output:")
+            for change in visible_output_changes:
+                lines.extend(_render_diff_change(change, indent="    "))
     return lines
 
 
@@ -950,6 +960,45 @@ def _diff_inline_notes(step_diff: object) -> list[str]:
     elif step_diff.output_changed:
         inline_notes.append("output: changed")
     return inline_notes
+
+
+def _visible_output_changes(output_changes: tuple[object, ...]) -> list[object]:
+    return [
+        change
+        for change in output_changes
+        if not str(getattr(change, "key", "")).startswith("config.")
+    ]
+
+
+def _visible_input_changes(input_changes: tuple[object, ...]) -> list[object]:
+    return [
+        change
+        for change in input_changes
+        if not str(getattr(change, "key", "")).startswith("config.")
+    ]
+
+
+def _format_diff_value(value: object) -> str:
+    if isinstance(value, str):
+        return value.replace("\n", " / ")
+    return str(value)
+
+
+def _render_diff_change(change: object, *, indent: str) -> list[str]:
+    before = getattr(change, "before", None)
+    after = getattr(change, "after", None)
+    key = str(getattr(change, "key", ""))
+    if _is_multiline_string(before) or _is_multiline_string(after):
+        return [
+            f"{indent}{key}:",
+            f"{indent}  before: {_format_diff_value(before)}",
+            f"{indent}  after: {_format_diff_value(after)}",
+        ]
+    return [f"{indent}{key}: {_format_diff_value(before)} -> {_format_diff_value(after)}"]
+
+
+def _is_multiline_string(value: object) -> bool:
+    return isinstance(value, str) and "\n" in value
 
 
 def _build_explain_verdict(explanations: tuple[object, ...] | list[object]) -> str:

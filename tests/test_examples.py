@@ -58,7 +58,16 @@ def test_hero_diff_replay_example_creates_two_runs(tmp_path: Path) -> None:
     assert diff_result.returncode == 0
     assert "transform:prepare_prompt" in diff_result.stdout
     assert "llm:generate_answer" in diff_result.stdout
-    assert "temperature: 0.2 -> 0.8" in diff_result.stdout
+    assert "config.prompt_style:" not in diff_result.stdout
+    assert "input:" in diff_result.stdout
+    assert "style: Be precise and definition-first. -> Be high-level, audience-friendly, and avoid jargon. Describe it as a platform." in diff_result.stdout
+    assert "derived:" not in diff_result.stdout
+    assert "derived-input:" not in diff_result.stdout
+    assert "prompt:" in diff_result.stdout
+    assert "before: Be precise and definition-first. / Question: Explain Kubernetes in one sentence." in diff_result.stdout
+    assert "after: Be high-level, audience-friendly, and avoid jargon. Describe it as a platform. / Question: Explain Kubernetes in one sentence." in diff_result.stdout
+    assert "answer:" in diff_result.stdout
+    assert "Kubernetes is a platform for running and managing containers." in diff_result.stdout
 
 
 def test_rag_failure_example_creates_baseline_and_failed_runs(tmp_path: Path) -> None:

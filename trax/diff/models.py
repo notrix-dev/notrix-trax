@@ -31,6 +31,8 @@ class StepDiff:
     after_position: int | None
     step_type: str | None
     attribute_changes: tuple[AttributeChange, ...] = ()
+    input_changes: tuple[AttributeChange, ...] = ()
+    output_changes: tuple[AttributeChange, ...] = ()
     output_changed: bool = False
     output_missing: bool = False
     parent_changed: bool = False

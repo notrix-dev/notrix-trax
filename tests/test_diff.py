@@ -135,6 +135,152 @@ def test_diff_cli_renders_readable_sections(tmp_path: Path, monkeypatch) -> None
     assert "top_k: 3 -> 5" in result.stdout
 
 
+def test_diff_cli_renders_top_level_output_field_changes(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    before = _persist_run(
+        "cli-output-before",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:01+00:00",
+        output_payload={"answer": "old"},
+        steps=[
+            _step(
+                "transform:prepare_prompt",
+                1,
+                attributes={"semantic_type": "transform"},
+                output_payload={"prompt_style": "precise", "temperature": 0.2},
+            ),
+        ],
+        edges=[],
+    )
+    after = _persist_run(
+        "cli-output-after",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:02+00:00",
+        output_payload={"answer": "new"},
+        steps=[
+            _step(
+                "transform:prepare_prompt",
+                1,
+                attributes={"semantic_type": "transform"},
+                output_payload={"prompt_style": "high-level", "temperature": 0.8},
+            ),
+        ],
+        edges=[],
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "diff", before.id, after.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert "output: changed" in result.stdout
+    assert "  output:" in result.stdout
+    assert "prompt_style: precise -> high-level" in result.stdout
+    assert "temperature: 0.2 -> 0.8" in result.stdout
+
+
+def test_diff_cli_keeps_non_config_output_changes_visible(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    before = _persist_run(
+        "cli-answer-before",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:01+00:00",
+        output_payload={"answer": "old"},
+        steps=[
+            _step(
+                "llm:generate_answer",
+                1,
+                attributes={"semantic_type": "llm"},
+                output_payload={"answer": "old"},
+            ),
+        ],
+        edges=[],
+    )
+    after = _persist_run(
+        "cli-answer-after",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:02+00:00",
+        output_payload={"answer": "new"},
+        steps=[
+            _step(
+                "llm:generate_answer",
+                1,
+                attributes={"semantic_type": "llm"},
+                output_payload={"answer": "new"},
+            ),
+        ],
+        edges=[],
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "diff", before.id, after.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert "  output:" in result.stdout
+    assert "answer: old -> new" in result.stdout
+
+
+def test_diff_cli_shows_hidden_config_changes_as_derived_input(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
+
+    before = _persist_run(
+        "cli-input-before",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:01+00:00",
+        output_payload={"answer": "old"},
+        steps=[
+            _step(
+                "llm:generate_answer",
+                1,
+                attributes={"semantic_type": "llm"},
+                input_payload={"prompt": "precise", "config": {"prompt_style": "precise", "avoid_jargon": False}},
+                output_payload={"answer": "old"},
+            ),
+        ],
+        edges=[],
+    )
+    after = _persist_run(
+        "cli-input-after",
+        started_at="2026-03-30T10:00:00+00:00",
+        ended_at="2026-03-30T10:00:02+00:00",
+        output_payload={"answer": "new"},
+        steps=[
+            _step(
+                "llm:generate_answer",
+                1,
+                attributes={"semantic_type": "llm"},
+                input_payload={"prompt": "friendly", "config": {"prompt_style": "friendly", "avoid_jargon": True}},
+                output_payload={"answer": "new"},
+            ),
+        ],
+        edges=[],
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-m", "trax.cli.main", "diff", before.id, after.id],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={"TRAX_HOME": str(tmp_path / ".trax")},
+    )
+
+    assert result.returncode == 0
+    assert "  input:" in result.stdout
+    assert "prompt: precise -> friendly" in result.stdout
+    assert "derived-input:" not in result.stdout
+
+
 def test_diff_cli_disambiguates_repeated_step_names_with_suffixes(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TRAX_HOME", str(tmp_path / ".trax"))
 
@@ -245,6 +391,9 @@ def _persist_run(
     persisted_steps: list[Step] = []
     for raw_step in steps:
         step_id = str(uuid.uuid4())
+        input_ref = None
+        if "input_payload" in raw_step:
+            input_ref = write_artifact(run_id, f"step-{raw_step['position']}-input", raw_step["input_payload"])
         output_ref = write_artifact(run_id, f"step-{raw_step['position']}-output", raw_step["output_payload"])
         step = Step(
             id=step_id,
@@ -255,6 +404,7 @@ def _persist_run(
             started_at=started_at,
             ended_at=ended_at,
             parent_step_id=raw_step.get("parent_step_id"),
+            input_artifact_ref=input_ref,
             output_artifact_ref=output_ref,
             attributes=dict(raw_step["attributes"]),
         )
@@ -274,11 +424,20 @@ def _persist_run(
     return run
 
 
-def _step(name: str, position: int, *, attributes: dict[str, object], output_payload: dict[str, object], parent_step_id: str | None = None) -> dict[str, object]:
+def _step(
+    name: str,
+    position: int,
+    *,
+    attributes: dict[str, object],
+    output_payload: dict[str, object],
+    input_payload: dict[str, object] | None = None,
+    parent_step_id: str | None = None,
+) -> dict[str, object]:
     return {
         "name": name,
         "position": position,
         "attributes": attributes,
+        "input_payload": input_payload,
         "output_payload": output_payload,
         "parent_step_id": parent_step_id,
     }

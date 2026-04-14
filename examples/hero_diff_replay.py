@@ -120,13 +120,13 @@ def main() -> None:
     run_a = run_pipeline(
         "quickstart-baseline",
         prompt_style="Be precise and definition-first.",
-        temperature=0.2,
+        temperature=0.4,
         top_k=2,
     )
     run_b = run_pipeline(
         "quickstart-changed",
         prompt_style="Be high-level, audience-friendly, and avoid jargon. Describe it as a platform.",
-        temperature=0.8,
+        temperature=0.2,
         top_k=2,
     )
 

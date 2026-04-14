@@ -61,6 +61,8 @@ def diff_runs(before_run_id: str, after_run_id: str) -> RunDiff:
 
     for match in matches:
         attribute_changes = _diff_attributes(match.before.attributes, match.after.attributes)
+        input_changes: list[AttributeChange] = []
+        output_changes: list[AttributeChange] = []
         reordered = match.before_index != match.after_index
         parent_changed = _parent_signature(match.before, before_match_by_id) != _parent_signature(
             match.after,
@@ -70,6 +72,20 @@ def diff_runs(before_run_id: str, after_run_id: str) -> RunDiff:
             match.before.output_artifact_ref,
             match.after.output_artifact_ref,
         )
+        input_changed, input_missing = _artifact_changed(
+            match.before.input_artifact_ref,
+            match.after.input_artifact_ref,
+        )
+        if input_changed and not input_missing:
+            input_changes = _diff_artifact_payloads(
+                match.before.input_artifact_ref,
+                match.after.input_artifact_ref,
+            )
+        if output_changed and not output_missing:
+            output_changes = _diff_artifact_payloads(
+                match.before.output_artifact_ref,
+                match.after.output_artifact_ref,
+            )
         if reordered:
             topology_changes.append(f"step reordered: {match.before.name}")
         if parent_changed:
@@ -92,6 +108,8 @@ def diff_runs(before_run_id: str, after_run_id: str) -> RunDiff:
                 after_position=match.after.position,
                 step_type=step_type_for_match(match.after),
                 attribute_changes=tuple(attribute_changes),
+                input_changes=tuple(input_changes),
+                output_changes=tuple(output_changes),
                 output_changed=output_changed,
                 output_missing=output_missing,
                 parent_changed=parent_changed,
@@ -191,6 +209,62 @@ def _artifact_changed(before_ref: str | None, after_ref: str | None) -> tuple[bo
     if before_missing or after_missing:
         return before_payload != after_payload, True
     return _artifact_hash(before_payload) != _artifact_hash(after_payload), False
+
+
+def _diff_artifact_payloads(before_ref: str | None, after_ref: str | None) -> list[AttributeChange]:
+    before_payload, before_missing = _load_artifact(before_ref)
+    after_payload, after_missing = _load_artifact(after_ref)
+    if before_missing or after_missing:
+        return []
+    before_payload = _artifact_diff_payload(before_payload)
+    after_payload = _artifact_diff_payload(after_payload)
+    if not isinstance(before_payload, dict) or not isinstance(after_payload, dict):
+        return []
+    return _diff_payload_dicts(before_payload, after_payload)
+
+
+def _artifact_diff_payload(payload: Any) -> Any:
+    if isinstance(payload, dict) and "preview" in payload:
+        return payload["preview"]
+    return payload
+
+
+def _diff_nested_attributes(before: dict[str, Any], after: dict[str, Any]) -> list[AttributeChange]:
+    changes: list[AttributeChange] = []
+    for key in sorted(set(before) | set(after)):
+        before_value = before.get(key)
+        after_value = after.get(key)
+        if isinstance(before_value, dict) and isinstance(after_value, dict):
+            nested_changes = _diff_attributes(before_value, after_value)
+            for nested_change in nested_changes:
+                changes.append(
+                    AttributeChange(
+                        key=f"{key}.{nested_change.key}",
+                        before=nested_change.before,
+                        after=nested_change.after,
+                    )
+                )
+    return changes
+
+
+def _diff_payload_dicts(before: dict[str, Any], after: dict[str, Any]) -> list[AttributeChange]:
+    changes: list[AttributeChange] = []
+    for key in sorted(set(before) | set(after)):
+        before_value = before.get(key)
+        after_value = after.get(key)
+        if isinstance(before_value, dict) and isinstance(after_value, dict):
+            nested_changes = _diff_attributes(before_value, after_value)
+            for nested_change in nested_changes:
+                changes.append(
+                    AttributeChange(
+                        key=f"{key}.{nested_change.key}",
+                        before=nested_change.before,
+                        after=nested_change.after,
+                    )
+                )
+        elif before_value != after_value:
+            changes.append(AttributeChange(key=key, before=before_value, after=after_value))
+    return changes
 
 
 def _load_artifact(artifact_ref: str | None) -> tuple[Any, bool]:
